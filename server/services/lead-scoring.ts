@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { aiInsights, leads } from "@/db/schema";
 import { aiProvider } from "@/server/ai/provider";
 import { buildScoringContext, buildPrompt } from "@/server/ai/scoring-context";
-import { aiScoreResponseSchema, scoreToLevel } from "@/server/ai/score-schema";
+import { aiScoreResponseSchema, normalizeFactorKeys, scoreToLevel } from "@/server/ai/score-schema";
 import { recordAudit } from "@/lib/api/audit";
 import { ValidationError } from "@/lib/errors";
 import { parseAndValidate } from "@/lib/validation";
@@ -86,7 +86,13 @@ export class LeadScoringService extends BaseService {
       jsonMode: true,
     });
 
-    const parsed = parseAndValidate(aiScoreResponseSchema, raw);
+    const reasons = normalizeFactorKeys(
+      Array.isArray(raw?.reasons) ? (raw.reasons as unknown[]) : [],
+    );
+    const parsed = parseAndValidate(aiScoreResponseSchema, {
+      ...(raw as Record<string, unknown>),
+      reasons,
+    });
 
     // Persist transactionally: history + latest snapshot.
     await db.transaction(async (tx) => {

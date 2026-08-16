@@ -77,15 +77,27 @@ export const LIFECYCLE_STATES: Record<LeadStatus, LifecycleState> = {
   },
 };
 
-/** Whether a transition from `from` to `to` is allowed. */
-export function canTransition(from: LeadStatus, to: LeadStatus): boolean {
+/**
+ * Whether a transition from `from` to `to` is allowed.
+ *
+ * Accepts `string` because lead statuses are tenant-configurable (Phase 16);
+ * unknown/custom statuses have no canonical lifecycle, so no transition is
+ * allowed beyond an explicit same-value no-op.
+ */
+export function canTransition(from: string, to: string): boolean {
   if (from === to) return true;
-  return LIFECYCLE_STATES[from].allowedNext.includes(to);
+  return LIFECYCLE_STATES[from as LeadStatus]?.allowedNext.includes(to as LeadStatus) ?? false;
 }
 
-/** All valid next statuses for a given current status (for UI). */
-export function allowedNextStatuses(current: LeadStatus): LeadStatus[] {
-  return LIFECYCLE_STATES[current].allowedNext;
+/**
+ * All valid next statuses for a given current status (for UI).
+ *
+ * Returns an empty array for unknown/custom statuses rather than throwing,
+ * since tenant-configurable statuses (Phase 16) may not exist in the
+ * canonical lifecycle map.
+ */
+export function allowedNextStatuses(current: string): LeadStatus[] {
+  return LIFECYCLE_STATES[current as LeadStatus]?.allowedNext ?? [];
 }
 
 /** Statuses that require a completed qualification assessment to enter. */

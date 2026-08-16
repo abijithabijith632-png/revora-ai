@@ -4,6 +4,8 @@ import {
   organizations,
   users,
   roles,
+  permissions,
+  rolePermissions,
   userRoles,
   authTokens,
   sessions,
@@ -26,6 +28,7 @@ import {
   SESSION_COOKIE,
   type AuthSession,
 } from "./session";
+import { ALL_PERMISSIONS, ROLE_PERMISSION_MATRIX } from "@/lib/permissions";
 import type {
   RegisterInput,
   LoginInput,
@@ -89,6 +92,33 @@ export async function register(input: RegisterInput) {
       .insert(roles)
       .values({ organizationId: org.id, name: "Admin", isSystem: true })
       .returning({ id: roles.id });
+
+    // Permissions are global vocabulary, while role grants are tenant-scoped.
+    // Provision both before assigning the first tenant administrator so a newly
+    // registered organization receives the canonical Admin capabilities.
+    await tx
+      .insert(permissions)
+      .values(
+        ALL_PERMISSIONS.map((permission) => {
+          const [resource, action] = permission.split(".");
+          return { resource, action };
+        }),
+      )
+      .onConflictDoNothing();
+
+    const permissionRows = await tx.select().from(permissions);
+    const permissionIds = new Map(
+      permissionRows.map((permission) => [
+        `${permission.resource}.${permission.action}`,
+        permission.id,
+      ]),
+    );
+    const adminPermissionGrants = [...ROLE_PERMISSION_MATRIX.Admin]
+      .map((permission) => permissionIds.get(permission))
+      .filter((permissionId): permissionId is string => Boolean(permissionId))
+      .map((permissionId) => ({ roleId: role.id, permissionId }));
+
+    await tx.insert(rolePermissions).values(adminPermissionGrants);
 
     await tx.insert(userRoles).values({ userId: user.id, roleId: role.id });
 

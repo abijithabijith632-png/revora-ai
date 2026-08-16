@@ -111,6 +111,7 @@ export class SearchRepository extends TenantRepository {
         lastName: contacts.lastName,
         email: contacts.email,
         phone: contacts.phone,
+        clientId: contacts.clientId,
         clientName: clients.companyName,
       })
       .from(contacts)
@@ -136,7 +137,7 @@ export class SearchRepository extends TenantRepository {
         subtitle: [r.email, r.phone, r.clientName].filter(Boolean).join(" · "),
         status: null,
         owner: null,
-        href: `/clients/${r.clientName ? "" : ""}`,
+        href: `/clients/${r.clientId}`,
       });
     }
 
@@ -192,7 +193,7 @@ export class SearchRepository extends TenantRepository {
         subtitle: null,
         status: r.status,
         owner: r.owner,
-        href: `/tasks/${r.id}`,
+        href: `/tasks?search=${encodeURIComponent(r.title)}`,
       });
     }
 
@@ -216,7 +217,7 @@ export class SearchRepository extends TenantRepository {
         subtitle: null,
         status: r.status,
         owner: r.owner,
-        href: `/meetings/${r.id}`,
+        href: `/meetings?search=${encodeURIComponent(r.title)}`,
       });
     }
 
@@ -244,7 +245,7 @@ export class SearchRepository extends TenantRepository {
         subtitle: null,
         status: r.type,
         owner: null,
-        href: `/activities`,
+        href: `/activities?search=${encodeURIComponent(r.subject ?? "")}`,
       });
     }
 
@@ -272,7 +273,7 @@ export class SearchRepository extends TenantRepository {
         subtitle: null,
         status: r.status,
         owner: null,
-        href: `/documents/${r.id}`,
+        href: `/documents?search=${encodeURIComponent(r.name)}`,
       });
     }
 

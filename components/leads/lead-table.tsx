@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,7 +10,10 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Eye,
+  Edit,
 } from "lucide-react";
+import { Can } from "@/components/auth/can";
 import {
   Badge,
   Button,
@@ -117,9 +120,18 @@ export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
     }
   }, [page, meta.pageSize, search, status, source, sortBy, sortOrder]);
 
+  // The server-rendered `initialRows` already match the current URL state on
+  // every mount, so only re-fetch when the user actually changes a
+  // filter/sort/page value — this avoids a duplicate list request (and the
+  // full-table loading flash) on every navigation to /leads.
+  const stateKey = [page, meta.pageSize, search, status, source, sortBy, sortOrder].join("|");
+  const fetchedKey = useRef(stateKey);
+
   useEffect(() => {
+    if (stateKey === fetchedKey.current) return;
+    fetchedKey.current = stateKey;
     void fetchRows();
-  }, [fetchRows]);
+  }, [stateKey, fetchRows]);
 
   function toggleSort(col: SortColumn) {
     if (sortBy === col) {
@@ -268,6 +280,7 @@ export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
                     <TableHead>Email</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>AI Score</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -300,7 +313,39 @@ export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
                         {lead.ownerName ?? "Unassigned"}
                       </TableCell>
                       <TableCell>
-                        <AiBadge aiScore={lead.aiScore} />
+                        <Link
+                          href={`/leads/${lead.id}`}
+                          title="View AI insights"
+                          className="inline-flex"
+                        >
+                          <AiBadge aiScore={lead.aiScore} />
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/leads/${lead.id}`}
+                            title="View lead details"
+                            className="inline-flex"
+                          >
+                            <Button size="sm" variant="ghost">
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Button>
+                          </Link>
+                          <Can permission="leads.edit">
+                            <Link
+                              href={`/leads/${lead.id}/edit`}
+                              title="Edit lead"
+                              className="inline-flex"
+                            >
+                              <Button size="sm" variant="outline">
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </Button>
+                            </Link>
+                          </Can>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

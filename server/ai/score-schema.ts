@@ -46,6 +46,67 @@ export const FACTOR_KEYS = [
 
 export type FactorKey = (typeof FACTOR_KEYS)[number];
 
+/**
+ * Models sometimes echo the untrusted CRM field names (companySize,
+ * interestedProduct, ...) as `factor` keys instead of the canonical enum.
+ * Map those observed variants to the closest canonical factor so strict
+ * validation still holds. Unknown keys remain untouched and are rejected.
+ */
+const FACTOR_ALIASES: Record<string, FactorKey> = {
+  budget_alignment: "budget_alignment",
+  budget: "budget_alignment",
+  budgetAvailability: "budget_alignment",
+  budget_availability: "budget_alignment",
+  requirement_clarity: "requirement_clarity",
+  requirementClarity: "requirement_clarity",
+  purchase_timeline: "purchase_timeline",
+  purchaseTimeline: "purchase_timeline",
+  expectedClosingDate: "purchase_timeline",
+  expected_closing_date: "purchase_timeline",
+  decision_maker: "decision_maker",
+  decisionMaker: "decision_maker",
+  company_fit: "company_fit",
+  companyFit: "company_fit",
+  companySize: "company_fit",
+  company_size: "company_fit",
+  industry: "company_fit",
+  companyScale: "company_fit",
+  geography: "company_fit",
+  product_fit: "product_fit",
+  productFit: "product_fit",
+  interestedProduct: "product_fit",
+  interested_product: "product_fit",
+  engagement_strength: "engagement_strength",
+  engagementStrength: "engagement_strength",
+  engagement: "engagement_strength",
+  activityCount: "engagement_strength",
+  lastActivityAt: "engagement_strength",
+  lead_source_quality: "lead_source_quality",
+  leadSourceQuality: "lead_source_quality",
+  source: "lead_source_quality",
+  historical_signal: "historical_signal",
+  historicalSignal: "historical_signal",
+  conversionProbability: "historical_signal",
+  outcome: "historical_signal",
+};
+
+export function normalizeFactorKeys(reasons: unknown[]): unknown[] {
+  return reasons.map((reason) => {
+    if (
+      reason &&
+      typeof reason === "object" &&
+      "factor" in (reason as Record<string, unknown>)
+    ) {
+      const raw = (reason as Record<string, unknown>).factor as string;
+      const canonical = FACTOR_ALIASES[raw];
+      if (canonical && canonical !== raw) {
+        return { ...(reason as object), factor: canonical };
+      }
+    }
+    return reason;
+  });
+}
+
 export const reasonSchema = z.object({
   factor: z.enum(FACTOR_KEYS),
   label: z.string().min(1).max(80),

@@ -32,6 +32,7 @@ Rules:
 - dataQuality is an integer 0-100 estimating how complete the provided input is.
 - confidence (0-1) may be included only if you can estimate it; otherwise omit it.
 - Provide 1-12 reasons, each with: factor (one of budget_alignment, requirement_clarity, purchase_timeline, decision_maker, company_fit, product_fit, engagement_strength, lead_source_quality, historical_signal), label, impact (positive|neutral|negative), explanation, and optional evidence.
+- factor MUST be exactly one of those enum strings. Never use the CRM data field names (e.g. companySize, geography, industry, interestedProduct, budget, source, status) as the factor value — map them to the closest enum factor instead.
 - Only state claims supported by the provided data. If a signal is missing, use impact "neutral" and explanation "Insufficient data".
 - positiveSignals and riskSignals must be short strings grounded in the data.
 - summary must be a plain-language explanation for a non-technical sales user.
