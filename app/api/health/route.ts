@@ -11,8 +11,12 @@ export async function GET() {
   try {
     await pool.query("SELECT 1");
     database = "up";
-  } catch {
+  } catch (error) {
     database = "down";
+    console.error("[health] database check failed", {
+      message: (error as Error).message,
+      code: (error as { code?: string }).code,
+    });
   }
 
   const healthy = database === "up";

@@ -46,7 +46,7 @@ function createPool(): Pool {
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 15_000,
   });
 
   pool.on("error", (err) => {
