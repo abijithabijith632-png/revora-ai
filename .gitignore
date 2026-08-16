@@ -32,3 +32,8 @@ next-env.d.ts
 
 # local files
 *.local
+
+# scratch/demo files
+*.log
+contacts-demo.html
+contacts-page.html
