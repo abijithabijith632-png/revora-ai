@@ -26,8 +26,24 @@ const globalForDb = globalThis as unknown as {
 };
 
 function createPool(): Pool {
+  const connectionString = serverEnv.databaseUrl;
+
+  // Supabase and most hosted Postgres providers require TLS. Local dev
+  // (localhost) does not. Enable SSL for any remote host so the pooler works
+  // out of the box; `rejectUnauthorized: false` keeps the connection encrypted
+  // while tolerating hosted-provider certificate chains.
+  let hostname = "localhost";
+  try {
+    hostname = new URL(connectionString).hostname;
+  } catch {
+    // Keep the safe default when the connection string cannot be parsed.
+  }
+  const isLocal =
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
   const pool = new Pool({
-    connectionString: serverEnv.databaseUrl,
+    connectionString,
+    ssl: isLocal ? undefined : { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
