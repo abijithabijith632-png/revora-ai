@@ -9,12 +9,20 @@ import { serverEnv } from "@/config/env";
  * A single pooled Postgres connection is created lazily and reused across the
  * server. The `serverEnv.databaseUrl` value must NEVER be exposed to the
  * browser — this module is imported by server-side code only.
+ *
+ * IMPORTANT: the `Pool` and Drizzle `db` instances are created lazily (on first
+ * real use) rather than at module load. This lets Vercel's build-time page-data
+ * collection evaluate server route modules without requiring `DATABASE_URL` to
+ * be set yet. The first actual database query will still surface a clear error
+ * if the connection string is missing.
  */
+
+type Database = ReturnType<typeof drizzle<typeof schema>>;
 
 // Global singleton to avoid duplicate pools during dev hot-reload.
 const globalForDb = globalThis as unknown as {
   pool?: Pool;
-  db?: ReturnType<typeof drizzle<typeof schema>>;
+  db?: Database;
 };
 
 function createPool(): Pool {
@@ -34,9 +42,43 @@ function createPool(): Pool {
   return pool;
 }
 
-export const pool = (globalForDb.pool ??= createPool());
+function getPool(): Pool {
+  return (globalForDb.pool ??= createPool());
+}
 
-export const db = (globalForDb.db ??= drizzle(pool, { schema }));
+function getDb(): Database {
+  return (globalForDb.db ??= drizzle(getPool(), { schema }));
+}
 
-export type Database = typeof db;
+/**
+ * Lazily-initialized wrapper. Importing this module (and these exports) does
+ * NOT open a connection or read `DATABASE_URL`. Initialization happens on the
+ * first property/method access.
+ */
+function lazyProxy<T extends object>(init: () => T): T {
+  let instance: T | undefined;
+
+  return new Proxy({} as T, {
+    get(_target, prop, receiver) {
+      const target = (instance ??= init());
+
+      if (typeof prop === "symbol") {
+        const value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+
+      const value = Reflect.get(target, prop, target) as unknown;
+      return typeof value === "function" ? (value as Function).bind(target) : value;
+    },
+    has(_target, prop) {
+      return prop in (instance ??= init());
+    },
+  });
+}
+
+export const pool = lazyProxy<Pool>(getPool);
+
+export const db = lazyProxy<Database>(getDb);
+
+export type { Database };
 export { schema };

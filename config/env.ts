@@ -9,12 +9,12 @@
  *
  * Secrets (DATABASE_URL, tokens, keys) must NEVER be referenced by client code.
  *
- * IMPORTANT: `serverEnv` values are resolved lazily (on property access) rather
- * than eagerly at module load. This lets static pages such as `/_not-found`
- * import `publicEnv` from this module during `next build` without requiring
- * `DATABASE_URL`/`AUTH_SECRET` to be present at build time. Server code that
- * actually uses a secret will still receive a clear runtime error if it is
- * missing.
+ * IMPORTANT: every `serverEnv` property is resolved independently and lazily
+ * (via getters) rather than eagerly at module load. This allows static pages
+ * such as `/_not-found` to import `publicEnv` from this module — and allows
+ * modules that only read non-secret fields (e.g. `sessionTtlSeconds`) — during
+ * `next build` without requiring `DATABASE_URL`/`AUTH_SECRET` to be present.
+ * Only the specific property that is actually accessed is validated.
  */
 
 const requiredString = (name: string, value: string | undefined): string => {
@@ -50,41 +50,60 @@ interface ServerEnv {
   paymentProviderApiKey: string;
 }
 
-function resolveServerEnv(): ServerEnv {
-  return {
-    databaseUrl: requiredString("DATABASE_URL", process.env.DATABASE_URL),
-    nodeEnv: process.env.NODE_ENV ?? "development",
-    appUrl: process.env.APP_URL ?? "http://localhost:3000",
-    isProduction: process.env.NODE_ENV === "production",
-    authSecret: requiredString("AUTH_SECRET", process.env.AUTH_SECRET),
-    sessionTtlSeconds: Number(
-      process.env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 7,
-    ),
-    aiProvider: process.env.AI_PROVIDER ?? "groq",
-    aiApiKey: process.env.AI_PROVIDER_API_KEY ?? "",
-    aiModel: process.env.AI_MODEL ?? "llama-3.3-70b-versatile",
-    aiBaseUrl: process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1",
-    emailProvider: process.env.EMAIL_PROVIDER ?? "",
-    emailProviderApiKey: process.env.EMAIL_PROVIDER_API_KEY ?? "",
-    paymentProvider: process.env.PAYMENT_PROVIDER ?? "",
-    paymentProviderApiKey: process.env.PAYMENT_PROVIDER_API_KEY ?? "",
-  };
-}
-
 /**
  * Server-only environment variables.
  *
  * @deprecated never import from a client component — it will surface runtime
  * errors in the browser by design, preventing accidental secret leakage.
  *
- * Values are resolved lazily so that merely importing this module (e.g. to
- * read `publicEnv`) does not require secrets to be configured.
+ * Each property is a getter, so accessing one value never forces resolution of
+ * the others. This keeps static builds working while still failing loudly for
+ * server code that genuinely needs an unset secret.
  */
-export const serverEnv = new Proxy({} as ServerEnv, {
-  get(_target, prop: keyof ServerEnv) {
-    return resolveServerEnv()[prop];
+export const serverEnv: ServerEnv = {
+  get databaseUrl() {
+    return requiredString("DATABASE_URL", process.env.DATABASE_URL);
   },
-});
+  get nodeEnv() {
+    return process.env.NODE_ENV ?? "development";
+  },
+  get appUrl() {
+    return process.env.APP_URL ?? "http://localhost:3000";
+  },
+  get isProduction() {
+    return process.env.NODE_ENV === "production";
+  },
+  get authSecret() {
+    return requiredString("AUTH_SECRET", process.env.AUTH_SECRET);
+  },
+  get sessionTtlSeconds() {
+    return Number(process.env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 7);
+  },
+  get aiProvider() {
+    return process.env.AI_PROVIDER ?? "groq";
+  },
+  get aiApiKey() {
+    return process.env.AI_PROVIDER_API_KEY ?? "";
+  },
+  get aiModel() {
+    return process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
+  },
+  get aiBaseUrl() {
+    return process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1";
+  },
+  get emailProvider() {
+    return process.env.EMAIL_PROVIDER ?? "";
+  },
+  get emailProviderApiKey() {
+    return process.env.EMAIL_PROVIDER_API_KEY ?? "";
+  },
+  get paymentProvider() {
+    return process.env.PAYMENT_PROVIDER ?? "";
+  },
+  get paymentProviderApiKey() {
+    return process.env.PAYMENT_PROVIDER_API_KEY ?? "";
+  },
+};
 
 /**
  * Public environment variables — safe for client usage.
