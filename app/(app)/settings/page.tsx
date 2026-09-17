@@ -22,8 +22,10 @@ export default async function SettingsPage() {
   if (!allowed) redirect("/forbidden");
 
   const service = new OrganizationSettingsService(session.organizationId);
-  const { profile, settings } = await service.getProfile();
-  const usage = await service.usage();
+  const [{ profile, settings }, usage] = await Promise.all([
+    service.getProfile(),
+    service.usage(),
+  ]);
 
   return (
     <div className="space-y-6">

@@ -37,3 +37,5 @@ next-env.d.ts
 *.log
 contacts-demo.html
 contacts-page.html
+.vercel
+.env*

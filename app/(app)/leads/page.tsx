@@ -27,22 +27,23 @@ export default async function LeadsPage({
   const page = Number(sp.page ?? "1") || 1;
   const pageSize = Math.min(Number(sp.pageSize ?? "20") || 20, 100);
 
-  const { rows, total } = await service.list({
-    pagination: { page, pageSize, offset: (page - 1) * pageSize },
-    sort: {
-      column: (sp.sortBy as "createdAt") ?? "createdAt",
-      order: sp.sortOrder === "asc" ? "asc" : "desc",
-    },
-    search: typeof sp.search === "string" ? sp.search : undefined,
-    filters: {
-      status:
-        typeof sp.status === "string" && sp.status ? (sp.status as never) : undefined,
-      source:
-        typeof sp.source === "string" && sp.source ? (sp.source as never) : undefined,
-    },
-  });
-
-  const summary = await service.summary();
+  const [{ rows, total }, summary] = await Promise.all([
+    service.list({
+      pagination: { page, pageSize, offset: (page - 1) * pageSize },
+      sort: {
+        column: (sp.sortBy as "createdAt") ?? "createdAt",
+        order: sp.sortOrder === "asc" ? "asc" : "desc",
+      },
+      search: typeof sp.search === "string" ? sp.search : undefined,
+      filters: {
+        status:
+          typeof sp.status === "string" && sp.status ? (sp.status as never) : undefined,
+        source:
+          typeof sp.source === "string" && sp.source ? (sp.source as never) : undefined,
+      },
+    }),
+    service.summary(),
+  ]);
 
   const totalPages = Math.ceil(total / pageSize);
 

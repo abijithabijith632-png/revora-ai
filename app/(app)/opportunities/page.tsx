@@ -28,19 +28,21 @@ export default async function OpportunitiesPage({
   const page = Number(sp.page ?? "1") || 1;
   const pageSize = Math.min(Number(sp.pageSize ?? "20") || 20, 100);
 
-  const { rows, total } = await service.list({
-    pagination: { page, pageSize, offset: (page - 1) * pageSize },
-    sort: { column: "createdAt", order: "desc" },
-    search: typeof sp.search === "string" ? sp.search : undefined,
-    filters: {
-      stageKey:
-        typeof sp.stageKey === "string" && sp.stageKey
-          ? (sp.stageKey as never)
-          : undefined,
-    },
-  });
+  const [{ rows, total }, { totals }] = await Promise.all([
+    service.list({
+      pagination: { page, pageSize, offset: (page - 1) * pageSize },
+      sort: { column: "createdAt", order: "desc" },
+      search: typeof sp.search === "string" ? sp.search : undefined,
+      filters: {
+        stageKey:
+          typeof sp.stageKey === "string" && sp.stageKey
+            ? (sp.stageKey as never)
+            : undefined,
+      },
+    }),
+    service.pipelineSummary(),
+  ]);
 
-  const { totals } = await service.pipelineSummary();
   const totalPages = Math.ceil(total / pageSize);
 
   const serializedRows = rows.map((r) => ({

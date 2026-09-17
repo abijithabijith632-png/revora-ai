@@ -110,8 +110,13 @@ vercel deploy --prod
 
 - **"Missing required environment variable: DATABASE_URL"** — set `DATABASE_URL`
   in Vercel project settings and redeploy.
+- **"set AUTH_SECRET and redeploy"** — add a stable, randomly generated
+  `AUTH_SECRET` to every Vercel environment. Do not rotate it after users have
+  registered unless you also migrate or reset their password hashes.
 - **"Connection refused / timed out"** — confirm the hosted DB allows connections
-  from Vercel's IPs (Neon/Supabase allow all by default).
+  from Vercel's IPs (Neon/Supabase allow all by default). Prefer your provider's
+  pooled/serverless connection URL; each Vercel function instance is limited to
+  one database connection by the application.
 - **Cannot sign in** — run `npm run db:migrate` against the hosted DB first.
 - **Health check** — `GET https://<your-project>.vercel.app/api/health` returns
   `{ status: "ok" }` when the database is reachable.

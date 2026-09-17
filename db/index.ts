@@ -44,9 +44,13 @@ function createPool(): Pool {
   const pool = new Pool({
     connectionString,
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
-    max: 10,
+    // A serverless function may be scaled into many independent instances.
+    // Keep each Vercel instance to one connection; use the provider's pooled
+    // connection URL (for example Neon pooled) for production traffic.
+    max: process.env.VERCEL ? 1 : 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 15_000,
+    allowExitOnIdle: Boolean(process.env.VERCEL),
   });
 
   pool.on("error", (err) => {
@@ -75,7 +79,7 @@ function lazyProxy<T extends object>(init: () => T): T {
   let instance: T | undefined;
 
   return new Proxy({} as T, {
-    get(_target, prop, receiver) {
+    get(_target, prop) {
       const target = (instance ??= init());
 
       if (typeof prop === "symbol") {
@@ -83,8 +87,10 @@ function lazyProxy<T extends object>(init: () => T): T {
         return typeof value === "function" ? value.bind(target) : value;
       }
 
-      const value = Reflect.get(target, prop, target) as unknown;
-      return typeof value === "function" ? (value as Function).bind(target) : value;
+      const value = Reflect.get(target, prop, target);
+      return typeof value === "function"
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
     },
     has(_target, prop) {
       return prop in (instance ??= init());

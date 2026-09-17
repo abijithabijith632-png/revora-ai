@@ -24,11 +24,11 @@ export async function GET() {
   return success(
     {
       status: healthy ? "ok" : "degraded",
-      service: "revora-ai-api",
+      service: "she-software-solutions-api",
       environment: serverEnv.nodeEnv,
       database,
       timestamp: new Date().toISOString(),
     },
-    { message: healthy ? "Revora AI server is running." : "Service degraded." },
+    { message: healthy ? "SHE Software Solutions server is running." : "Service degraded." },
   );
 }

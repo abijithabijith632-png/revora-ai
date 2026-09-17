@@ -54,8 +54,10 @@ export function Topbar({
         const body = (await response.json()) as SearchResponse;
         if (response.ok && body.success) {
           setResults(body.data);
-          setHasSearched(true);
+        } else {
+          setResults([]);
         }
+        setHasSearched(true);
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           setResults([]);
@@ -90,7 +92,7 @@ export function Topbar({
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="relative hidden w-full max-w-md sm:block">
+      <div className="relative w-full max-w-xs sm:max-w-md lg:max-w-lg">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" aria-hidden="true" />
         <input
           value={query}

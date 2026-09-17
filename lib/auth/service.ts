@@ -47,12 +47,14 @@ const VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24; // 24h
 const RESET_TTL_MS = 1000 * 60 * 30; // 30m
 
 function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "") + `-${Date.now().toString(36)}`
-  );
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  const suffix = `-${Date.now().toString(36)}`;
+  const maxBaseLength = 64 - suffix.length;
+  const trimmedBase = base.length > maxBaseLength ? base.slice(0, maxBaseLength) : base;
+  return `${trimmedBase}${suffix}`;
 }
 
 function findUserByEmail(email: string) {
@@ -125,16 +127,16 @@ export async function register(input: RegisterInput) {
     return [user];
   });
 
-  // Issue verification token (raw returned once; only hash stored).
-  const rawToken = generateToken();
-  await db.insert(authTokens).values({
-    userId: createdUser.id,
-    type: "email_verification",
-    tokenHash: hashToken(rawToken),
-    expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS),
-  });
+  // Registration signs the user in immediately. The raw opaque token is only
+  // written to the HttpOnly cookie; the database stores its SHA-256 hash.
+  const token = await createSession(createdUser.id);
+  await setSessionCookie(token);
 
-  return { userId: createdUser.id, verificationToken: rawToken };
+  return {
+    userId: createdUser.id,
+    organizationId: createdUser.organizationId,
+    email: createdUser.email,
+  };
 }
 
 /* -------------------------------------------------------------

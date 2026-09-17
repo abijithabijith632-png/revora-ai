@@ -1,6 +1,8 @@
 import { success, failure } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const session = await getSession();

@@ -2,53 +2,49 @@
 
 /*
  * ============================================================
- * Revora AI — Design System (Phase 1 foundation)
+ * SHE Software Solutions — Design System
  * ------------------------------------------------------------
- * A single source of truth for design tokens. Components consume
- * these tokens (via Tailwind utilities mapping to the variables
- * below) instead of hardcoding hex values. Theming (light/dark)
- * is handled by swapping CSS custom properties under the `.dark`
- * class (managed by `next-themes`).
+ * Pink / White / Black visual theme.
  * ============================================================
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ------------------------------------------------------------
- * Semantic design tokens
+ * Semantic design tokens — Light theme
  * ------------------------------------------------------------ */
 :root {
   color-scheme: light;
 
-  /* Brand */
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #dce7fe;
-  --color-brand-200: #c0d4fe;
-  --color-brand-300: #94b7fd;
-  --color-brand-400: #618ff9;
-  --color-brand-500: #3b6af5;
-  --color-brand-600: #254bea;
-  --color-brand-700: #1d39d7;
-  --color-brand-800: #1e31ae;
-  --color-brand-900: #1e2f89;
-  --color-brand-950: #172054;
+  /* Brand — Pink palette */
+  --color-brand-50: #FFF7FB;
+  --color-brand-100: #FCE7F3;
+  --color-brand-200: #FBCFE8;
+  --color-brand-300: #F9A8D4;
+  --color-brand-400: #F472B6;
+  --color-brand-500: #EC4899;
+  --color-brand-600: #DB2777;
+  --color-brand-700: #BE185D;
+  --color-brand-800: #9D174D;
+  --color-brand-900: #831843;
+  --color-brand-950: #500724;
 
   /* Surfaces */
-  --color-background: #f7f8fb;
-  --color-surface: #ffffff;
-  --color-surface-hover: #f1f3f9;
-  --color-surface-subtle: #fafbfe;
-  --color-elevated: #ffffff;
+  --color-background: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #FFF7FB;
+  --color-surface-subtle: #FFF7FB;
+  --color-elevated: #FFFFFF;
 
   /* Borders */
-  --color-border: #e5e8f0;
-  --color-border-strong: #d3d8e4;
+  --color-border: #F3D5E5;
+  --color-border-strong: #E4B3CC;
 
   /* Text */
-  --color-foreground: #0f172a;
-  --color-muted: #5b6472;
-  --color-muted-foreground: #6b7280;
-  --color-faint: #9aa3b2;
+  --color-foreground: #111111;
+  --color-muted: #555555;
+  --color-muted-foreground: #777777;
+  --color-faint: #999999;
 
   /* Semantic status */
   --color-success: #16a34a;
@@ -60,12 +56,12 @@
   --color-info: #0284c7;
   --color-info-bg: #f0f9ff;
 
-  /* Accent for AI / intelligence visuals */
-  --color-ai: #7c3aed;
-  --color-ai-bg: #f5f3ff;
+  /* Accent for AI / intelligence visuals — pink */
+  --color-ai: #EC4899;
+  --color-ai-bg: #FFF7FB;
 
   /* Focus ring */
-  --color-ring: #3b6af5;
+  --color-ring: #EC4899;
 
   /* Radii */
   --radius-sm: 0.375rem;
@@ -75,14 +71,14 @@
   --radius-full: 9999px;
 
   /* Shadows — elevation scale */
-  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
-  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(17 17 17 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(17 17 17 / 0.08), 0 1px 2px rgb(17 17 17 / 0.04);
   --shadow-md:
-    0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+    0 4px 6px -1px rgb(17 17 17 / 0.08), 0 2px 4px -2px rgb(17 17 17 / 0.05);
   --shadow-lg:
-    0 10px 15px -3px rgb(15 23 42 / 0.1), 0 4px 6px -4px rgb(15 23 42 / 0.05);
+    0 10px 15px -3px rgb(17 17 17 / 0.1), 0 4px 6px -4px rgb(17 17 17 / 0.05);
   --shadow-xl:
-    0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
+    0 20px 25px -5px rgb(17 17 17 / 0.12), 0 8px 10px -6px rgb(17 17 17 / 0.08);
 
   /* Motion */
   --duration-fast: 120ms;
@@ -121,22 +117,25 @@
   --space-12: 3rem;
 }
 
+/* ------------------------------------------------------------
+ * Semantic design tokens — Dark theme
+ * ------------------------------------------------------------ */
 .dark {
   color-scheme: dark;
 
-  --color-background: #0b0f1a;
-  --color-surface: #111827;
-  --color-surface-hover: #1a2234;
-  --color-surface-subtle: #0f1626;
-  --color-elevated: #162032;
+  --color-background: #0f0f0f;
+  --color-surface: #1a1a1a;
+  --color-surface-hover: #242424;
+  --color-surface-subtle: #161616;
+  --color-elevated: #222222;
 
-  --color-border: #232d42;
-  --color-border-strong: #33405c;
+  --color-border: #333333;
+  --color-border-strong: #444444;
 
-  --color-foreground: #eef2f9;
-  --color-muted: #a7b0c2;
-  --color-muted-foreground: #8b94a7;
-  --color-faint: #6b7488;
+  --color-foreground: #FFFFFF;
+  --color-muted: #B0B0B0;
+  --color-muted-foreground: #888888;
+  --color-faint: #666666;
 
   --color-success: #22c55e;
   --color-success-bg: #0c2316;
@@ -147,10 +146,10 @@
   --color-info: #38bdf8;
   --color-info-bg: #0a1a26;
 
-  --color-ai: #a78bfa;
-  --color-ai-bg: #1c1533;
+  --color-ai: #F472B6;
+  --color-ai-bg: #1a1018;
 
-  --color-ring: #618ff9;
+  --color-ring: #EC4899;
 
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
@@ -265,19 +264,19 @@
 .ai-orb {
   background: radial-gradient(
     circle at 35% 30%,
-    #a78bfa 0%,
-    #7c3aed 45%,
-    #3b6af5 100%
+    #F9A8D4 0%,
+    #EC4899 45%,
+    #DB2777 100%
   );
   box-shadow:
-    0 0 60px 10px rgb(124 58 237 / 0.35),
-    inset -12px -12px 30px rgb(23 32 84 / 0.6);
+    0 0 60px 10px rgb(236 72 153 / 0.35),
+    inset -12px -12px 30px rgb(83 24 67 / 0.6);
   animation: orb-float 6s ease-in-out infinite;
   transform-style: preserve-3d;
 }
 
 .ai-orb-ring {
-  border: 1px solid rgb(167 139 250 / 0.4);
+  border: 1px solid rgb(249 168 212 / 0.4);
   border-radius: 9999px;
   animation: orb-ring-spin 12s linear infinite;
 }

@@ -29,7 +29,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
         <AiOrb className="scale-125" />
       </div>
 
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md sm:max-w-lg">
         <div className="mb-8 flex justify-center">
           <Logo showWordmark />
         </div>

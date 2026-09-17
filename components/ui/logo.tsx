@@ -1,29 +1,65 @@
+"use client";
+
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Revora AI brand mark + wordmark.
+ * SHE Software Solutions brand mark + wordmark.
  *
- * The mark is a compact "R" monogram with an AI accent dot, suitable for
- * the sidebar, topbar, and auth surfaces. Pure CSS/Tailwind — no assets.
+ * Uses actual logo assets from /branding/ directory.
+ * Supports light/dark theme switching.
  */
 export function Logo({
   showWordmark = true,
+  variant = "main",
   className,
 }: {
   showWordmark?: boolean;
+  variant?: "main" | "navbar";
   className?: string;
 }) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+
+  if (variant === "navbar") {
+    const src = isDark
+      ? "/branding/she-navbar-dark.svg"
+      : "/branding/she-navbar-light.svg";
+    return (
+      <span className={cn("inline-flex items-center", className)}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="SHE Software Solutions"
+          className="h-8 w-auto"
+          draggable={false}
+        />
+      </span>
+    );
+  }
+
+  const logoSrc = isDark
+    ? "/branding/she-logo-dark.svg"
+    : "/branding/she-logo-light.svg";
+
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
-      <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-brand-500 via-brand-600 to-ai shadow-sm">
-        <span className="text-sm font-bold leading-none text-white">R</span>
-        <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-white/90" />
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={logoSrc}
+        alt="SHE Software Solutions"
+        className="h-8 w-auto"
+        draggable={false}
+      />
       {showWordmark && (
         <span className="flex flex-col leading-none">
           <span className="text-sm font-semibold tracking-tight text-foreground">
-            Revora
-            <span className="text-brand-600"> AI</span>
+            SHE Software Solutions
           </span>
           <span className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-faint">
             Sales Intelligence

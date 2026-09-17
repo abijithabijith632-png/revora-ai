@@ -9,9 +9,9 @@ export const metadata: Metadata = {
     template: `%s · ${publicEnv.appName}`,
   },
   description:
-    "Revora AI is an enterprise-grade, AI-powered CRM and Sales Intelligence Platform.",
+    "SHE Software Solutions is an enterprise-grade, AI-powered CRM and Sales Intelligence Platform.",
   applicationName: publicEnv.appName,
-  keywords: ["CRM", "Sales Intelligence", "AI", "Revora"],
+  keywords: ["CRM", "Sales Intelligence", "AI", "SHE Software Solutions"],
 };
 
 export default function RootLayout({

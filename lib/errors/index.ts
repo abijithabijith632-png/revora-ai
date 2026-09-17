@@ -15,6 +15,7 @@ export type ErrorCode =
   | "CONFLICT"
   | "DATABASE_ERROR"
   | "RATE_LIMITED"
+  | "CONFIGURATION_ERROR"
   | "INTERNAL_ERROR";
 
 const STATUS_BY_CODE: Record<ErrorCode, number> = {
@@ -25,6 +26,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   CONFLICT: 409,
   DATABASE_ERROR: 500,
   RATE_LIMITED: 429,
+  CONFIGURATION_ERROR: 500,
   INTERNAL_ERROR: 500,
 };
 
@@ -92,6 +94,14 @@ export class DatabaseError extends AppError {
   constructor(message = "A database error occurred.", cause?: unknown) {
     super("DATABASE_ERROR", message, { cause });
     this.name = "DatabaseError";
+  }
+}
+
+/** A required server-side setting is absent or invalid. */
+export class ConfigurationError extends AppError {
+  constructor(message: string, cause?: unknown) {
+    super("CONFIGURATION_ERROR", message, { cause });
+    this.name = "ConfigurationError";
   }
 }
 

@@ -17,12 +17,33 @@
  * Only the specific property that is actually accessed is validated.
  */
 
+import { ConfigurationError } from "@/lib/errors";
+
 const requiredString = (name: string, value: string | undefined): string => {
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    throw new ConfigurationError(
+      `Server configuration is incomplete: set ${name} and redeploy.`,
+    );
   }
   return value;
 };
+
+/**
+ * Normalizes a Postgres connection string so stray whitespace can never corrupt
+ * the parsed components (e.g. `database "postgres " does not exist`).
+ *
+ * Connection strings are often pasted from dashboards into env config, and a
+ * trailing space (or a space before `?query` params) makes the driver resolve a
+ * database name that includes the whitespace. URLs never legitimately contain
+ * whitespace, so trimming the value and removing spaces adjacent to the query
+ * delimiter is always safe.
+ */
+const normalizeDatabaseUrl = (value: string): string =>
+  value
+    .trim()
+    .replace(/\s+\?/g, "?")
+    .replace(/\?\s+/g, "?")
+    .replace(/\/\s+/g, "/");
 
 interface ServerEnv {
   /** PostgreSQL connection string. Never expose to the client. */
@@ -62,7 +83,19 @@ interface ServerEnv {
  */
 export const serverEnv: ServerEnv = {
   get databaseUrl() {
-    return requiredString("DATABASE_URL", process.env.DATABASE_URL);
+    const databaseUrl = normalizeDatabaseUrl(
+      requiredString("DATABASE_URL", process.env.DATABASE_URL),
+    );
+    try {
+      const url = new URL(databaseUrl);
+      if (!url.protocol.startsWith("postgres")) throw new Error("not Postgres");
+    } catch (cause) {
+      throw new ConfigurationError(
+        "Server configuration is invalid: DATABASE_URL must be a PostgreSQL connection URL.",
+        cause,
+      );
+    }
+    return databaseUrl;
   },
   get nodeEnv() {
     return process.env.NODE_ENV ?? "development";
@@ -77,7 +110,13 @@ export const serverEnv: ServerEnv = {
     return requiredString("AUTH_SECRET", process.env.AUTH_SECRET);
   },
   get sessionTtlSeconds() {
-    return Number(process.env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 7);
+    const value = Number(process.env.SESSION_TTL_SECONDS ?? 60 * 60 * 24 * 7);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new ConfigurationError(
+        "Server configuration is invalid: SESSION_TTL_SECONDS must be a positive number.",
+      );
+    }
+    return value;
   },
   get aiProvider() {
     return process.env.AI_PROVIDER ?? "groq";
@@ -110,6 +149,6 @@ export const serverEnv: ServerEnv = {
  * Only `NEXT_PUBLIC_*` values may appear here.
  */
 export const publicEnv = {
-  appName: process.env.NEXT_PUBLIC_APP_NAME ?? "Revora AI",
+  appName: process.env.NEXT_PUBLIC_APP_NAME ?? "SHE Software Solutions",
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
 } as const;

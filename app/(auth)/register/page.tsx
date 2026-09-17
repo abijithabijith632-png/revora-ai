@@ -9,7 +9,7 @@ export default function RegisterPage() {
       <CardHeader>
         <CardTitle className="text-2xl">Create your account</CardTitle>
         <CardDescription>
-          Set up your organization and start using Revora AI.
+          Set up your organization and start using SHE Software Solutions.
         </CardDescription>
       </CardHeader>
       <CardContent>

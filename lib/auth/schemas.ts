@@ -1,22 +1,25 @@
 import { z } from "zod";
-import { passwordPolicy } from "./password";
 
 /**
  * Authentication Zod schemas — single source of truth shared by server
  * route handlers and client forms.
  */
 
-const email = z.string().trim().email("Enter a valid email address.");
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email address.");
 
 export const registerSchema = z.object({
-  fullName: z.string().trim().min(2, "Name is required.").max(255),
+  fullName: z.string().trim().min(1, "Name is required.").max(255),
   email,
-  password: passwordPolicy,
+  password: z.string().min(1, "Password is required."),
   confirmPassword: z.string(),
   organizationName: z
     .string()
     .trim()
-    .min(2, "Organization name is required.")
+    .min(1, "Organization name is required.")
     .max(255),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords do not match.",
@@ -33,7 +36,7 @@ export const forgotPasswordSchema = z.object({ email });
 export const resetPasswordSchema = z
   .object({
     token: z.string().min(1, "Reset token is required."),
-    password: passwordPolicy,
+    password: z.string().min(1, "Password is required."),
     confirmPassword: z.string(),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -44,7 +47,7 @@ export const resetPasswordSchema = z
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Current password is required."),
-    newPassword: passwordPolicy,
+    newPassword: z.string().min(1, "Password is required."),
     confirmPassword: z.string(),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {

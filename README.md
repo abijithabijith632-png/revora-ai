@@ -61,7 +61,9 @@ npm install
 cp .env.example .env
 ```
 
-The only required variable is `DATABASE_URL`. See [`.env.example`](.env.example).
+The required server variables are `DATABASE_URL` and `AUTH_SECRET`. Generate a
+unique production secret with `openssl rand -base64 32`; changing it invalidates
+all existing password hashes. See [`.env.example`](.env.example).
 
 ### Database
 

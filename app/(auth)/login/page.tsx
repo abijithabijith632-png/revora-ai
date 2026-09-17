@@ -7,7 +7,7 @@ export default function LoginPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl">Sign in to Revora AI</CardTitle>
+        <CardTitle className="text-2xl">Sign in to SHE Software Solutions</CardTitle>
         <CardDescription>
           Enter your credentials to access your workspace.
         </CardDescription>

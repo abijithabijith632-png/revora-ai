@@ -28,7 +28,7 @@ export class ReportingService extends BaseService {
     const pipeline = await this.analytics.pipelineByStage();
 
     const rows: ReportRow[] = [];
-    let title = "Revora Report";
+    let title = "SHE Software Solutions Report";
 
     if (area === "pipeline") {
       title = "Pipeline Report";

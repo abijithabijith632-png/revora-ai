@@ -129,7 +129,7 @@ export function LoginForm() {
       </div>
       <SubmitButton loading={loading}>Sign in</SubmitButton>
       <p className="text-center text-sm text-muted-foreground">
-        New to Revora AI?{" "}
+        New to SHE Software Solutions?{" "}
         <Link href="/register" className="text-brand-600 hover:text-brand-700">
           Create one
         </Link>
@@ -202,7 +202,7 @@ export function RegisterForm() {
           autoComplete="email"
         />
       </FormField>
-      <FormField label="Password" required hint="8+ chars, upper, lower, number, special.">
+      <FormField label="Password" required>
         <PasswordInput
           name="password"
           value={form.password}

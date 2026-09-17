@@ -46,7 +46,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
   FREE: {
     key: "FREE",
     name: "Free",
-    description: "For individuals evaluating Revora AI.",
+    description: "For individuals evaluating SHE Software Solutions.",
     priceMonthly: null,
     limits: {
       userSeats: 2,

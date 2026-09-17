@@ -73,6 +73,9 @@ export async function getSession(): Promise<AuthSession | null> {
   };
 }
 
+/** Resolve the signed-in user from the current request's session cookie. */
+export const getCurrentUser = getSession;
+
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {

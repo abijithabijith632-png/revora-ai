@@ -13,6 +13,11 @@ export async function getSession(): Promise<AuthSession | null> {
   return resolveSession();
 }
 
+/** Preferred name for resolving the signed-in user in server code. */
+export async function getCurrentUser(): Promise<AuthSession | null> {
+  return resolveSession();
+}
+
 export async function requireSession(): Promise<AuthSession> {
   const session = await resolveSession();
   if (!session) {
