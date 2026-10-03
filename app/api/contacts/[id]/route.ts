@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { ContactService } from "@/server/services/contacts";
 import { updateContactSchema } from "@/lib/clients/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("contacts.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new ContactService(session.organizationId);
     const contact = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("contacts.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateContactSchema);
 
     const service = new ContactService(session.organizationId);
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("contacts.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new ContactService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);

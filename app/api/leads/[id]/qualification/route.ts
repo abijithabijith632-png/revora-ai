@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { QualificationService } from "@/server/services/qualification";
 import { createQualificationSchema } from "@/lib/leads/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("leads.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new QualificationService(session.organizationId);
     const result = await service.getForLead(id);
@@ -27,7 +27,7 @@ export async function POST(
 ) {
   try {
     const session = await requireApiContext("leads.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = parseBody(req, createQualificationSchema);
 
     const service = new QualificationService(session.organizationId);

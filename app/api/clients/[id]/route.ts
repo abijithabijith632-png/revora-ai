@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { ClientService } from "@/server/services/clients";
 import { updateClientSchema, clientStatusSchema } from "@/lib/clients/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("clients.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new ClientService(session.organizationId);
     const client = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("clients.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateClientSchema);
 
     const service = new ClientService(session.organizationId);
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("clients.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new ClientService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);
@@ -63,7 +63,7 @@ export async function PUT(
 ) {
   try {
     const session = await requireApiContext("clients.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, clientStatusSchema);
 
     const service = new ClientService(session.organizationId);

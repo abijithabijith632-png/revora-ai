@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { LeadService } from "@/server/services/leads";
 import { updateLeadStatusSchema } from "@/lib/leads/schemas";
@@ -10,7 +10,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("leads.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = parseBody(req, updateLeadStatusSchema);
 
     const service = new LeadService(session.organizationId);

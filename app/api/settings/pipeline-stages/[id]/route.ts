@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { PipelineConfigService } from "@/server/services/pipeline-config";
 
@@ -17,7 +17,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("pipeline.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = parseBody(req, patchSchema);
     const service = new PipelineConfigService(session.organizationId);
     const row = await service.update({ userId: session.userId }, id, await input);

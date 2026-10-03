@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { AssignmentService } from "@/server/services/assignment";
 import { LeadService } from "@/server/services/leads";
@@ -11,7 +11,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("leads.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new AssignmentService(session.organizationId);
     const [eligible, history] = await Promise.all([
@@ -31,7 +31,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("leads.assign");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, assignLeadSchema);
 
     // Manual assignment (the only strategy the existing endpoint supports

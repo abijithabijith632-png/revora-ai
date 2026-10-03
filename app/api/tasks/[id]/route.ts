@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { TaskService } from "@/server/services/tasks";
 import { updateTaskSchema } from "@/lib/operations/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("tasks.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new TaskService(session.organizationId);
     const task = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("tasks.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateTaskSchema);
 
     const service = new TaskService(session.organizationId);
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("tasks.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new TaskService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);

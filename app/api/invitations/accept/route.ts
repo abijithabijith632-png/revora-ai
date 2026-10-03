@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { invitations } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hashToken } from "@/lib/auth/tokens";
-import { ForbiddenError } from "@/lib/errors";
+import { NotFoundError } from "@/lib/errors";
 
 const acceptSchema = z.object({
   token: z.string().min(1),
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const invite = await db.query.invitations.findFirst({
       where: eq(invitations.tokenHash, hashToken(token)),
     });
-    if (!invite) throw new ForbiddenError("Invalid invitation.");
+    if (!invite) throw new NotFoundError("Invitation is invalid, expired, or already used.");
 
     const service = new UserAdminService(invite.organizationId);
     const result = await service.acceptInvitation(token, { fullName, password });

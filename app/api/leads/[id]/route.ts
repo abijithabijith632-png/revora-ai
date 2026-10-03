@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { LeadService } from "@/server/services/leads";
 import { updateLeadSchema } from "@/lib/leads/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("leads.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new LeadService(session.organizationId);
     const lead = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("leads.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = parseBody(req, updateLeadSchema);
 
     const service = new LeadService(session.organizationId);
@@ -49,7 +49,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("leads.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new LeadService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);

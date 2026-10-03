@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { TaskService } from "@/server/services/tasks";
 import { taskStatusSchema } from "@/lib/operations/schemas";
@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const session = await requireApiContext("tasks.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, taskStatusSchema);
 
     const service = new TaskService(session.organizationId);

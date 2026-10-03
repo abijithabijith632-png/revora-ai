@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { UserAdminService } from "@/server/services/user-admin";
 
@@ -14,7 +14,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("users.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const { status } = await parseBody(req, statusSchema);
     const service = new UserAdminService(session.organizationId);
     const row = await service.changeStatus(

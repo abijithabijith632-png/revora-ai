@@ -1,6 +1,6 @@
 export { success, failure } from "./response";
 export type { ApiMeta, ApiErrorBody } from "./response";
-export { parseBody } from "./parse";
+export { parseBody, parsePathId } from "./parse";
 export {
   parsePagination,
   parseSort,

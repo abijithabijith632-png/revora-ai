@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure } from "@/lib/api";
+import { success, failure, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { EmailTemplateService } from "@/server/services/email-templates";
 
@@ -9,7 +9,7 @@ export async function POST(
 ) {
   try {
     const session = await requireApiContext("proposals.create");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new EmailTemplateService(session.organizationId);
     const copy = await service.duplicate({ userId: session.userId }, id);

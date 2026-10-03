@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { ProposalService } from "@/server/services/proposals";
 import {
@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("proposals.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new ProposalService(session.organizationId);
     const proposal = await service.getById(id);
@@ -30,7 +30,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("proposals.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateProposalSchema);
 
     const service = new ProposalService(session.organizationId);
@@ -48,7 +48,7 @@ export async function POST(
 ) {
   try {
     const session = await requireApiContext("proposals.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, proposalStatusSchema);
 
     const service = new ProposalService(session.organizationId);

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure } from "@/lib/api";
+import { success, failure, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { DeduplicationService } from "@/server/services/deduplication";
 
@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("leads.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new DeduplicationService(session.organizationId);
     const duplicates = await service.findDuplicates(id);

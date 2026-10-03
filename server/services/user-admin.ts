@@ -127,10 +127,10 @@ export class UserAdminService extends BaseService {
     const repo = new InvitationRepository(this.organizationId);
     const invite = await repo.findByTokenHash(hashToken(token));
     if (!invite || invite.status !== "pending") {
-      throw new NotFoundError("Invitation is invalid or already used.");
+      throw new NotFoundError("Invitation is invalid, expired, or already used.");
     }
     if (invite.expiresAt.getTime() < Date.now()) {
-      throw new ForbiddenError("Invitation has expired.");
+      throw new NotFoundError("Invitation is invalid, expired, or already used.");
     }
 
     const passwordHash = hashPassword(input.password);

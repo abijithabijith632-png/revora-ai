@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { EmailTemplateService } from "@/server/services/email-templates";
 import { updateEmailTemplateSchema } from "@/lib/commercial/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("proposals.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new EmailTemplateService(session.organizationId);
     const template = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("proposals.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateEmailTemplateSchema);
 
     const service = new EmailTemplateService(session.organizationId);
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("proposals.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new EmailTemplateService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);

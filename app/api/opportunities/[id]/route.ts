@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure, parseBody } from "@/lib/api";
+import { success, failure, parseBody, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { OpportunityService } from "@/server/services/opportunities";
 import { updateOpportunitySchema } from "@/lib/opportunities/schemas";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("opportunities.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new OpportunityService(session.organizationId);
     const opp = await service.getById(id);
@@ -27,7 +27,7 @@ export async function PATCH(
 ) {
   try {
     const session = await requireApiContext("opportunities.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
     const input = await parseBody(req, updateOpportunitySchema);
 
     const service = new OpportunityService(session.organizationId);
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const session = await requireApiContext("opportunities.delete");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new OpportunityService(session.organizationId);
     const result = await service.archive({ userId: session.userId }, id);

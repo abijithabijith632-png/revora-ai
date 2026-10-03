@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { success, failure } from "@/lib/api";
+import { failure, success, parsePathId } from "@/lib/api";
 import { requireApiContext } from "@/lib/api/context";
 import { checkRateLimit, rateLimitKey } from "@/lib/api/rate-limit";
 import { LeadScoringService } from "@/server/services/lead-scoring";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await requireApiContext("leads.view");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     const service = new LeadScoringService(session.organizationId);
     const result = await service.getForLead(id);
@@ -27,7 +27,7 @@ export async function POST(
 ) {
   try {
     const session = await requireApiContext("leads.edit");
-    const { id } = await params;
+    const id = await parsePathId(params);
 
     // Rate limit expensive AI triggers (per user).
     checkRateLimit(
