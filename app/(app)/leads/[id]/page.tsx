@@ -7,6 +7,10 @@ import { LeadService } from "@/server/services/leads";
 import { QualificationService } from "@/server/services/qualification";
 import { LeadScoringService } from "@/server/services/lead-scoring";
 import { ConversionService } from "@/server/services/conversion";
+import { DeduplicationService } from "@/server/services/deduplication";
+import { NextActionService } from "@/server/services/next-action";
+import { DataQualityCard, NextActionCard } from "@/components/ai/next-action-card";
+import { BuyingIntentPanel } from "@/components/ai/phase3-panels";
 import {
   PageHeader,
   Card,
@@ -54,12 +58,16 @@ export default async function LeadDetailPage({
   const qualificationService = new QualificationService(session.organizationId);
   const scoringService = new LeadScoringService(session.organizationId);
   const conversionService = new ConversionService(session.organizationId);
+  const deduplicationService = new DeduplicationService(session.organizationId);
+  const nextActionService = new NextActionService(session.organizationId);
 
-  const [lead, qualification, aiScore, conversion] = await Promise.all([
+  const [lead, qualification, aiScore, conversion, dataQuality, nextAction] = await Promise.all([
     service.getById(id).catch(() => null),
     qualificationService.getForLead(id).catch(() => null),
     scoringService.getForLead(id).catch(() => null),
     conversionService.preview(id).catch(() => null),
+    deduplicationService.inspectLead(id).catch(() => null),
+    nextActionService.suggest({ entityType: "lead", entityId: id }).catch(() => null),
   ]);
   if (!lead) notFound();
 
@@ -149,6 +157,7 @@ export default async function LeadDetailPage({
       </Card>
 
       <LeadDuplicates leadId={lead.id} />
+      {dataQuality && <DataQualityCard issues={dataQuality.issues} duplicateCount={dataQuality.duplicates.length} />}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
@@ -157,6 +166,7 @@ export default async function LeadDetailPage({
             latest={aiScoreState.latest as never}
             history={aiScoreState.history as never}
           />
+          <NextActionCard suggestion={nextAction} />
           <LeadAssignment leadId={lead.id} />
 
           <Card>
@@ -206,6 +216,7 @@ export default async function LeadDetailPage({
 
         <div className="space-y-6">
           <LeadQualification leadId={lead.id} state={qualificationState} />
+          <BuyingIntentPanel leadId={lead.id} />
 
           <Card>
             <CardHeader>

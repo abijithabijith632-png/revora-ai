@@ -1,4 +1,4 @@
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { TenantRepository } from "./base";
 import {
   notifications,
@@ -94,6 +94,14 @@ export class NotificationRepository extends TenantRepository {
       })
       .returning();
     return row;
+  }
+
+  async existsRecentForEntity(userId: string, entityType: string, entityId: string, since: Date) {
+    const [row] = await this.db.select({ id: notifications.id }).from(notifications)
+      .where(and(this.baseWhere(userId), eq(notifications.type, "ai_alert"),
+        eq(notifications.relatedEntityType, entityType), eq(notifications.relatedEntityId, entityId),
+        gte(notifications.createdAt, since))).limit(1);
+    return Boolean(row);
   }
 
   async markRead(userId: string, id: string) {

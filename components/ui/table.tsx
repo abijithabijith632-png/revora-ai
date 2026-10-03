@@ -20,9 +20,9 @@ export function Table({
   ...props
 }: HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div role="region" aria-label="Scrollable data table" tabIndex={0} className="w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <table
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full min-w-[640px] caption-bottom text-sm", className)}
         {...props}
       />
     </div>

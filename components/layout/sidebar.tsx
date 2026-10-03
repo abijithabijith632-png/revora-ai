@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X, PanelLeftClose, PanelLeftOpen, ChevronsUpDown } from "lucide-react";
@@ -34,6 +35,31 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const can = usePermission();
+  const asideRef = useRef<HTMLElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(query.matches);
+    update(); query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (!isMobile || !open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const getFocusable = () => Array.from(asideRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? []).filter((element) => element.offsetParent !== null);
+    getFocusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key !== "Tab") return;
+      const elements = getFocusable();
+      if (!elements.length) return;
+      const first = elements[0]; const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => { window.removeEventListener("keydown", onKeyDown); previousFocus?.focus(); };
+  }, [isMobile, open, onClose]);
 
   const sections = NAV_SECTIONS.map((section) => ({
     ...section,
@@ -51,6 +77,12 @@ export function Sidebar({
       )}
 
       <aside
+        ref={asideRef}
+        id="app-sidebar"
+        role={isMobile ? "dialog" : undefined}
+        aria-modal={isMobile ? true : undefined}
+        aria-hidden={isMobile && !open}
+        inert={isMobile && !open}
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-surface",
           "transition-[width,transform] duration-base ease-out",
@@ -130,8 +162,9 @@ export function Sidebar({
                     <Link
                       href={item.href}
                       aria-label={item.label}
+                      onClick={() => { if (isMobile) onClose(); }}
                       className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium",
+                        "flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium lg:min-h-0",
                         "transition-colors duration-fast",
                         collapsed && "lg:justify-center lg:px-0",
                         active

@@ -22,6 +22,7 @@ import {
 } from "@/lib/clients/presentation";
 import { ClientTimeline } from "@/components/clients";
 import { ActivityTimeline } from "@/components/operations";
+import { AccountIntelligencePanel } from "@/components/ai/phase3-panels";
 
 export const metadata = { title: "Client Detail" };
 
@@ -101,6 +102,7 @@ export default async function ClientDetailPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
+          <AccountIntelligencePanel accountId={client.id} />
           <Card>
             <CardHeader>
               <CardTitle>Company</CardTitle>

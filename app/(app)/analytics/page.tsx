@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { PageHeader, Card, CardContent, CardHeader, CardTitle, CardDescription, KpiCard, Badge } from "@/components/ui";
 import { AnalyticsService } from "@/server/services/analytics";
 import { ForecastingService } from "@/server/services/forecasting";
 import { formatMoney } from "@/lib/money";
+import { GenerateAiAlertsButton } from "@/components/analytics/generate-ai-alerts-button";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,7 @@ export default async function AnalyticsPage() {
   const analytics = new AnalyticsService(session.organizationId);
   const forecasting = new ForecastingService(session.organizationId);
 
-  const [dashboard, funnel, sourceAttribution, pipelineByStage, forecast, risk] =
+  const [dashboard, funnel, sourceAttribution, pipelineByStage, forecast, risk, pipelineInsights] =
     await Promise.all([
       analytics.dashboard(),
       analytics.funnel(),
@@ -19,6 +21,7 @@ export default async function AnalyticsPage() {
       analytics.pipelineByStage(),
       forecasting.revenueForecast(),
       forecasting.churnRisk(),
+      forecasting.pipelineIntelligence(),
     ]);
 
   return (
@@ -104,16 +107,17 @@ export default async function AnalyticsPage() {
               </div>
             ))}
             <p className="text-xs text-faint">
-              Method: {forecast.method} · Provider configured:{" "}
-              {forecast.providerConfigured ? "Yes" : "No"}
+              Method: {forecast.methodLabel} · Confidence: unavailable (not calibrated)
             </p>
+            <p className="text-xs text-muted-foreground">Won revenue {formatMoney(forecast.wonRevenue)} · Pipeline {formatMoney(forecast.pipelineValue)} · Weighted pipeline {formatMoney(forecast.weightedPipelineValue)}</p>
+            <p className="text-xs text-faint">Estimate only; not guaranteed revenue.</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Churn / risk early warning</CardTitle>
+          <CardTitle>Client inactivity risk</CardTitle>
           <CardDescription>{risk.explanation}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -137,6 +141,22 @@ export default async function AnalyticsPage() {
               </div>
             ))
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-4">
+          <div><CardTitle>Opportunity risk & pipeline intelligence</CardTitle><CardDescription>Signals from recorded activity, stage changes, tasks, follow-ups, and close dates.</CardDescription></div>
+          <GenerateAiAlertsButton />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {pipelineInsights.stalledOpportunities.slice(0, 10).map((r) => <div key={r.opportunityId} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2 text-sm">
+            <span className="font-medium">{r.opportunityName}{r.stage ? ` · ${r.stage}` : ""}</span><Badge variant={r.riskScore >= 60 ? "danger" : r.riskScore >= 30 ? "warning" : "neutral"}>{r.riskLevel} risk · {r.riskScore}</Badge><span className="w-full text-muted-foreground">{r.reasons.join(" ") || "No recorded risk signals."}</span>
+          </div>)}
+          {pipelineInsights.stalledOpportunities.length === 0 && <p className="text-sm text-muted-foreground">No recorded opportunity risk signals.</p>}
+          {pipelineInsights.bottleneck && <p className="text-sm text-muted-foreground">Largest stage by deal count: {pipelineInsights.bottleneck.stage} ({pipelineInsights.bottleneck.opportunityCount} deals).</p>}
+          {pipelineInsights.highValueOpportunities.length > 0 && <div><p className="text-sm font-medium">Highest-value open opportunities</p>{pipelineInsights.highValueOpportunities.slice(0, 3).map((item) => <p key={item.opportunityId} className="text-sm"><Link className="text-brand-600 hover:underline" href={`/opportunities/${item.opportunityId}`}>{item.opportunityName}</Link> · {formatMoney(item.amount)}</p>)}</div>}
+          {pipelineInsights.recentPipelineChanges.length > 0 && <div><p className="text-sm font-medium">Recent stage probability changes (7 days)</p>{pipelineInsights.recentPipelineChanges.slice(0, 3).map((change, index) => <p key={`${change.opportunityId}-${index}`} className="text-sm text-muted-foreground"><Link className="text-brand-600 hover:underline" href={change.opportunityUrl}>{change.opportunityName}</Link> · {change.previousProbability ?? "—"}% → {change.newProbability ?? "—"}%</p>)}</div>}
+          <p className="text-xs text-faint">Method: {pipelineInsights.method}. Scores are review signals, not guaranteed predictions.</p>
         </CardContent>
       </Card>
     </div>

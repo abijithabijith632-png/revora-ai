@@ -6,9 +6,9 @@ export async function GET() {
   try {
     const session = await requireApiContext("analytics.view");
     const service = new ForecastingService(session.organizationId);
-    const risk = await service.churnRisk();
+    const [risk, opportunityRisk] = await Promise.all([service.churnRisk(), service.dealRisks()]);
 
-    return success(risk, { message: "OK" });
+    return success({ ...risk, opportunityRisks: opportunityRisk.risks, method: opportunityRisk.method, generatedAt: opportunityRisk.generatedAt }, { message: "OK" });
   } catch (error) {
     return failure(error);
   }

@@ -131,6 +131,22 @@ export class DeduplicationService extends BaseService {
     return withOwners;
   }
 
+  /** Non-destructive quality suggestions for one tenant-scoped lead. */
+  async inspectLead(leadId: string) {
+    const lead = await this.leadRepo.findById(leadId);
+    if (!lead) throw new NotFoundError("Lead not found.");
+    const issues: Array<{ field: string; issue: string; suggestion: string; confidence: "low" | "moderate" | "high" }> = [];
+    if (!lead.email) issues.push({ field: "email", issue: "Missing email address", suggestion: "Add a verified business email if available.", confidence: "high" });
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) issues.push({ field: "email", issue: "Email format appears invalid", suggestion: "Verify the email address before updating it.", confidence: "high" });
+    if (!lead.phone) issues.push({ field: "phone", issue: "Missing phone number", suggestion: "Add a verified phone number if available.", confidence: "moderate" });
+    if (!lead.companyName) issues.push({ field: "companyName", issue: "Missing company", suggestion: "Add the organization name if known.", confidence: "moderate" });
+    if (!lead.industry) issues.push({ field: "industry", issue: "Missing industry", suggestion: "Add an industry only when confirmed.", confidence: "low" });
+    const ageDays = Math.floor((Date.now() - lead.updatedAt.getTime()) / 86400000);
+    if (ageDays >= 180) issues.push({ field: "updatedAt", issue: `Record has not been updated for ${ageDays} days`, suggestion: "Confirm the contact details and lead status.", confidence: "moderate" });
+    return { leadId, issues, duplicates: await this.findDuplicates(leadId), destructiveChangesApplied: false,
+      method: "deterministic_crm_validation", generatedAt: new Date().toISOString() };
+  }
+
   /**
    * Safe merge: duplicate (source) → targetLeadId.
    * The duplicate is soft-deleted and its `mergedIntoId` set; related records

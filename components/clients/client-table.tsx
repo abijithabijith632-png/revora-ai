@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Download, Plus, Search } from "lucide-react";
@@ -90,9 +90,16 @@ export function ClientTable({
     }
   }, [page, meta.pageSize, search, status]);
 
+  // Avoid duplicate fetch on mount: initialRows already match the URL state.
+  // Only re-fetch when the user actually changes a filter/sort/page value.
+  const stateKey = [page, meta.pageSize, search, status].join("|");
+  const fetchedKey = useRef(stateKey);
+
   useEffect(() => {
-    fetchRows();
-  }, [fetchRows]);
+    if (stateKey === fetchedKey.current) return;
+    fetchedKey.current = stateKey;
+    void fetchRows();
+  }, [stateKey, fetchRows]);
 
   return (
     <Card>

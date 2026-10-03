@@ -34,6 +34,12 @@ export class NotificationService extends BaseService {
     entityType?: string | null;
     entityId?: string | null;
   }) {
+    if (input.type === "ai_alert" && input.entityType && input.entityId) {
+      const duplicate = await this.repo.existsRecentForEntity(
+        input.userId, input.entityType, input.entityId, new Date(Date.now() - 24 * 60 * 60 * 1000),
+      );
+      if (duplicate) return null;
+    }
     const prefs = await this.repo.getPreferences(input.userId);
 
     if (prefs && prefs.inAppEnabled === false) return null;
@@ -43,7 +49,14 @@ export class NotificationService extends BaseService {
       if (perType === false) return null;
     }
 
-    return this.repo.create(input);
+    return this.repo.create({
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      relatedEntityType: input.entityType,
+      relatedEntityId: input.entityId,
+    });
   }
 
   async markRead(userId: string, id: string) {

@@ -8,9 +8,6 @@
 /out/
 /build
 
-# production
-/build
-
 # misc
 .DS_Store
 *.pem
@@ -38,4 +35,7 @@ next-env.d.ts
 contacts-demo.html
 contacts-page.html
 .vercel
-.env*
+
+# Playwright generated files
+playwright-report/
+playwright-results/

@@ -181,7 +181,7 @@ export default async function DashboardPage() {
                 </div>
               ))}
               <p className="pt-2 text-xs text-faint">
-                Method: {forecast.method} · AI configured: {forecast.providerConfigured ? "Yes" : "No"}
+                Method: {forecast.methodLabel} · Estimate only; not guaranteed revenue.
               </p>
             </CardContent>
           </Card>

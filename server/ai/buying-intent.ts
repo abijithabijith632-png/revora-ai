@@ -1,0 +1,6 @@
+export function calculateBuyingIntent(x: { activity: number; recent: number; meetings: number; proposals: number; engagement: number }, now = new Date()) {
+  const signals = [x.recent ? x.recent + " recent CRM activities" : null, x.meetings ? x.meetings + " meeting records" : null, x.proposals ? x.proposals + " proposal records" : null, x.engagement ? x.engagement + " email opens/clicks" : null].filter((x): x is string => Boolean(x));
+  if (!x.activity && !x.meetings && !x.proposals && !x.engagement) return { level: "Insufficient data", score: null, signals: [], explanation: "No first-party CRM engagement is recorded.", recommendedAction: "Record a sales interaction before assessing buying intent.", provenance: "deterministic_first_party_crm", generatedAt: now.toISOString() };
+  const score = Math.min(100, x.recent * 8 + x.meetings * 16 + x.proposals * 24 + x.engagement * 8);
+  return { level: score >= 60 ? "High" : score >= 30 ? "Moderate" : "Low", score, signals, explanation: "Calculated only from recorded CRM engagement; this is not external intent data.", recommendedAction: score >= 60 ? "Contact promptly and confirm the buying timeline." : score >= 30 ? "Follow up and validate requirements." : "Continue qualification and record engagement.", provenance: "deterministic_first_party_crm", generatedAt: now.toISOString() };
+}

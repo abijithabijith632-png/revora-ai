@@ -32,6 +32,12 @@ interface AssignmentRecord {
   reason: string | null;
   assignedAt: string;
 }
+interface AssignmentRecommendation {
+  recommendedExecutive: { id: string; fullName: string; jobTitle: string | null };
+  reason: string;
+  confidence: number;
+  method: string;
+}
 
 function strategyLabel(s: string): string {
   return s
@@ -52,6 +58,8 @@ export function LeadAssignment({ leadId }: { leadId: string }) {
   const [assigneeId, setAssigneeId] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recommendation, setRecommendation] = useState<AssignmentRecommendation | null>(null);
+  const [recommendationError, setRecommendationError] = useState("");
 
   async function load() {
     try {
@@ -127,6 +135,30 @@ export function LeadAssignment({ leadId }: { leadId: string }) {
     }
   }
 
+  async function getRecommendation() {
+    setBusy(true); setRecommendationError(""); setRecommendation(null);
+    try {
+      const response = await fetch(`/api/leads/${leadId}/assign/recommend`, { method: "POST" });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error?.message ?? "Could not recommend an assignee.");
+      setRecommendation(json.data);
+    } catch (error) { setRecommendationError(error instanceof Error ? error.message : "Recommendation unavailable."); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmRecommendation() {
+    if (!recommendation) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/leads/${leadId}/assign`, { method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId: recommendation.recommendedExecutive.id, strategy: "manual", reason: `Confirmed recommendation: ${recommendation.reason}` }) });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error?.message ?? "Could not assign lead.");
+      toast({ variant: "success", title: "Recommended executive assigned." }); setRecommendation(null); await load(); router.refresh();
+    } catch (error) { toast({ variant: "error", title: "Assignment failed", description: error instanceof Error ? error.message : undefined }); }
+    finally { setBusy(false); }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -175,6 +207,18 @@ export function LeadAssignment({ leadId }: { leadId: string }) {
             >
               Assign Manually
             </Button>
+
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <p className="text-sm font-medium">AI-assisted assignment recommendation</p>
+              <Button size="sm" variant="outline" disabled={busy || loading} loading={busy} onClick={getRecommendation}>Recommend executive</Button>
+              {recommendationError && <p className="text-sm text-danger">{recommendationError}</p>}
+              {recommendation && <div className="space-y-2 text-sm">
+                <p><span className="font-medium">{recommendation.recommendedExecutive.fullName}</span> · {recommendation.recommendedExecutive.jobTitle ?? "Executive"}</p>
+                <p className="text-muted-foreground">{recommendation.reason}</p>
+                <p className="text-xs text-muted-foreground">{recommendation.confidence}% confidence · {recommendation.method.replaceAll("_", " ")}. No assignment has been changed.</p>
+                <Button size="sm" disabled={busy} onClick={confirmRecommendation}>Confirm assignment</Button>
+              </div>}
+            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="neutral">Auto-route</Badge>

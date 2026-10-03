@@ -22,6 +22,8 @@ import {
   type PipelineStageKey,
 } from "@/lib/opportunities/pipeline";
 import { formatMoney } from "@/lib/money";
+import { NextActionService } from "@/server/services/next-action";
+import { NextActionCard } from "@/components/ai/next-action-card";
 
 export const metadata = { title: "Opportunity Detail" };
 
@@ -47,6 +49,8 @@ export default async function OpportunityDetailPage({
   const opportunityActivities = await activityService
     .timeline("opportunity", id)
     .catch(() => []);
+  const nextAction = await new NextActionService(session.organizationId)
+    .suggest({ entityType: "opportunity", entityId: id }).catch(() => null);
   const timelineActivities = opportunityActivities.map((a) => ({
     id: a.id,
     type: a.type,
@@ -174,6 +178,7 @@ export default async function OpportunityDetailPage({
         </div>
 
         <div className="space-y-6">
+          <NextActionCard suggestion={nextAction} />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

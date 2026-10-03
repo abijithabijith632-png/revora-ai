@@ -80,19 +80,22 @@ export class LeadScoringService extends BaseService {
     );
 
     const prompt = buildPrompt(context);
-    const raw = await aiProvider.generateStructured({
-      system: prompt.system,
-      user: prompt.user,
-      jsonMode: true,
-    });
-
-    const reasons = normalizeFactorKeys(
-      Array.isArray(raw?.reasons) ? (raw.reasons as unknown[]) : [],
-    );
-    const parsed = parseAndValidate(aiScoreResponseSchema, {
-      ...(raw as Record<string, unknown>),
-      reasons,
-    });
+    let parsed: ReturnType<typeof parseAndValidate<typeof aiScoreResponseSchema>>;
+    let provenance: string;
+    if (context.availableFields < 4 || !aiProvider.isConfigured) {
+      parsed = this.insufficientDataScore(context.availableFields, context.totalFields);
+      provenance = context.availableFields < 4 ? "deterministic_insufficient_data" : "deterministic_provider_unavailable";
+    } else {
+      try {
+        const raw = await aiProvider.generateStructured({ system: prompt.system, user: prompt.user, jsonMode: true });
+        const reasons = normalizeFactorKeys(Array.isArray(raw?.reasons) ? (raw.reasons as unknown[]) : []);
+        parsed = parseAndValidate(aiScoreResponseSchema, { ...(raw as Record<string, unknown>), reasons });
+        provenance = "provider_assisted";
+      } catch {
+        parsed = this.insufficientDataScore(context.availableFields, context.totalFields);
+        provenance = "deterministic_provider_fallback";
+      }
+    }
 
     // Persist transactionally: history + latest snapshot.
     await db.transaction(async (tx) => {
@@ -113,8 +116,9 @@ export class LeadScoringService extends BaseService {
           dataQuality: parsed.dataQuality,
           availableFields: context.availableFields,
           totalFields: context.totalFields,
+          provenance,
         },
-        modelVersion: aiProvider.model,
+        modelVersion: provenance === "provider_assisted" ? aiProvider.model : provenance,
       });
 
       await tx
@@ -135,9 +139,24 @@ export class LeadScoringService extends BaseService {
       action: "approve",
       entityType: "lead",
       entityId: leadId,
-      metadata: { aiScore: parsed.score, model: aiProvider.model },
+      metadata: { aiScore: parsed.score, provenance },
     });
 
     return this.getForLead(leadId);
+  }
+
+  private insufficientDataScore(availableFields: number, totalFields: number) {
+    const score = Math.min(35, Math.round((availableFields / Math.max(1, totalFields)) * 35));
+    return {
+      score,
+      level: scoreToLevel(score),
+      confidence: 0.15,
+      dataQuality: Math.round((availableFields / Math.max(1, totalFields)) * 100),
+      reasons: [{ factor: "historical_signal" as const, label: "Limited CRM evidence", impact: "neutral" as const,
+        explanation: "There is not enough verified CRM information for a reliable lead score.", evidence: `${availableFields} of ${totalFields} context fields available` }],
+      summary: "Insufficient verified data for a reliable score. Complete the lead profile and log engagement before relying on this estimate.",
+      riskSignals: [],
+      positiveSignals: [],
+    };
   }
 }

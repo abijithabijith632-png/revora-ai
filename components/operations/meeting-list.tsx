@@ -24,6 +24,7 @@ import {
   meetingStatusLabel,
   meetingStatusVariant,
 } from "@/lib/operations/presentation";
+import { MeetingSummaryButton } from "@/components/ai/meeting-summary-button";
 
 interface MeetingRow {
   id: string;
@@ -128,6 +129,7 @@ export function MeetingList({
               <TableHead>Duration</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Link</TableHead>
+              <TableHead>AI summary</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -165,6 +167,7 @@ export function MeetingList({
                     "—"
                   )}
                 </TableCell>
+                <TableCell><MeetingSummaryButton meetingId={m.id} /></TableCell>
               </TableRow>
             ))}
           </TableBody>

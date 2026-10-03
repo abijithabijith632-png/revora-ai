@@ -24,10 +24,12 @@ interface SearchResponse {
 /** Authenticated app topbar with tenant-scoped global search and sign-out. */
 export function Topbar({
   onMenuClick,
+  navigationOpen,
   user,
   unreadNotifications,
 }: {
   onMenuClick: () => void;
+  navigationOpen: boolean;
   user: { name: string; email: string };
   unreadNotifications?: number;
 }) {
@@ -39,7 +41,7 @@ export function Topbar({
 
   useEffect(() => {
     const term = query.trim();
-    if (!term) {
+    if (!term || term.length < 2) {
       setResults([]);
       setHasSearched(false);
       return;
@@ -47,6 +49,8 @@ export function Topbar({
 
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
+      // Additional check in case query changed during debounce
+      if (query.trim().length < 2) return;
       try {
         const response = await fetch(`/api/search?q=${encodeURIComponent(term)}&limit=10`, {
           signal: controller.signal,
@@ -87,12 +91,12 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur-md lg:px-6">
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick} aria-label="Open navigation">
+    <header className="sticky top-0 z-20 flex h-16 min-w-0 items-center gap-2 border-b border-border bg-surface/80 px-2 backdrop-blur-md sm:gap-3 sm:px-4 lg:px-6">
+      <Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={onMenuClick} aria-label="Open navigation" aria-controls="app-sidebar" aria-expanded={navigationOpen}>
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="relative w-full max-w-xs sm:max-w-md lg:max-w-lg">
+      <div className="relative min-w-0 w-auto max-w-none flex-1 lg:max-w-lg">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" aria-hidden="true" />
         <input
           value={query}
@@ -101,7 +105,7 @@ export function Topbar({
           placeholder="Search leads, clients, opportunities…"
           aria-label="Search leads, clients, opportunities"
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-faint">
+        <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-faint sm:flex">
           <Command className="h-3 w-3" aria-hidden="true" />K
         </span>
         {query.trim() && (
@@ -129,10 +133,10 @@ export function Topbar({
         )}
       </div>
 
-      <div className="flex-1" />
-      <NotificationCenter initialCount={unreadNotifications ?? 0} />
-      <ThemeToggle />
-      <Button variant="ghost" size="sm" className="gap-2 px-1.5" aria-label="Sign out" onClick={handleLogout} loading={isSigningOut}>
+      <div className="hidden flex-1 sm:block" />
+      <div className="shrink-0"><NotificationCenter initialCount={unreadNotifications ?? 0} /></div>
+      <div className="shrink-0"><ThemeToggle /></div>
+      <Button variant="ghost" size="sm" className="shrink-0 gap-2 px-1.5" aria-label="Sign out" onClick={handleLogout} loading={isSigningOut}>
         <Avatar name={user.name} status="online" size="sm" />
       </Button>
     </header>

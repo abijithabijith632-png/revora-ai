@@ -33,7 +33,7 @@ export function AppShell({
 
   return (
     <PermissionProvider permissions={permissions}>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen min-w-0 bg-background">
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -44,16 +44,17 @@ export function AppShell({
         />
         <div
           className={cn(
-            "transition-[padding] duration-base ease-out",
+            "min-w-0 transition-[padding] duration-base ease-out",
             collapsed ? "lg:pl-16" : "lg:pl-64",
           )}
         >
           <Topbar
             onMenuClick={() => setSidebarOpen(true)}
+            navigationOpen={sidebarOpen}
             user={user}
             unreadNotifications={unreadNotifications}
           />
-          <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
+          <main className="mx-auto min-w-0 max-w-7xl px-3 py-5 sm:px-4 sm:py-6 lg:px-8 lg:py-8">
             <div className="page-enter">{children}</div>
           </main>
         </div>

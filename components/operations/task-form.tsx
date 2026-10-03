@@ -89,11 +89,11 @@ export function TaskForm({
         </FormField>
       </div>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={() => router.back()}>
+      <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" type="button" variant="ghost" onClick={() => router.back()}>
           Cancel
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button className="w-full sm:w-auto" type="submit" disabled={submitting}>
           {submitting ? "Saving…" : "Create task"}
         </Button>
       </div>

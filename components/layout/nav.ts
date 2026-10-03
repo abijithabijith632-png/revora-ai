@@ -49,6 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Leads", href: "/leads", icon: Users, permission: "leads.view" },
       { label: "Assignments", href: "/leads/assignments", icon: UserRoundCog, permission: "leads.assign" },
+      { label: "Sequences", href: "/sequences", icon: ListTodo, permission: "leads.assign" },
       { label: "Clients", href: "/clients", icon: Building2, permission: "clients.view" },
       { label: "Contacts", href: "/contacts", icon: Contact, permission: "contacts.view" },
       { label: "Opportunities", href: "/opportunities", icon: Target, permission: "opportunities.view" },
@@ -71,7 +72,9 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Intelligence",
     items: [
       { label: "AI Assistant", href: "/ai-assistant", icon: Sparkles, permission: "ai_insights.view" },
+      { label: "AI Agents", href: "/ai-agents", icon: Sparkles, permission: "dashboard.view" },
       { label: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+      { label: "Sales Intelligence", href: "/sales-intelligence", icon: Sparkles, permission: "dashboard.view" },
     ],
   },
   {
