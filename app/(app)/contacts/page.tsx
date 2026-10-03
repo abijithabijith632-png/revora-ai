@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { userHasPermission } from "@/lib/permissions/authorize";
 import { ContactService } from "@/server/services/contacts";
+import { ClientService } from "@/server/services/clients";
 import { PageHeader, Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui";
-import { ContactTable } from "@/components/clients";
+import { ContactTable, NewContactButton } from "@/components/clients";
 
 export const metadata = { title: "Contacts" };
 
@@ -45,11 +46,25 @@ export default async function ContactsPage({
     createdAt: c.createdAt.toISOString(),
   }));
 
+  const canCreate = await userHasPermission(
+    session.userId,
+    session.organizationId,
+    "contacts.create",
+  );
+  const clientRows = canCreate
+    ? await new ClientService(session.organizationId).list({
+        pagination: { page: 1, pageSize: 200, offset: 0 },
+        sort: { column: "companyName", order: "asc" },
+      })
+    : { rows: [] };
+  const clients = clientRows.rows.map((c) => ({ id: c.id, companyName: c.companyName }));
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Contacts"
         description="Manage people associated with your client accounts."
+        actions={canCreate ? <NewContactButton clients={clients} /> : undefined}
       />
 
       <Card>

@@ -71,12 +71,12 @@ export function OpportunityForm({
     try {
       const payload = {
         ...values,
-        amount: values.amount.trim() === "" ? null : Number(values.amount),
+        amount: values.amount.trim() === "" ? undefined : Number(values.amount),
         probability:
-          values.probability.trim() === "" ? null : Number(values.probability),
+          values.probability.trim() === "" ? undefined : Number(values.probability),
         expectedCloseDate:
-          values.expectedCloseDate.trim() === "" ? null : values.expectedCloseDate,
-        ownerId: values.ownerId.trim() === "" ? null : values.ownerId,
+          values.expectedCloseDate.trim() === "" ? undefined : values.expectedCloseDate,
+        ownerId: values.ownerId.trim() === "" ? undefined : values.ownerId,
       };
 
       const res = await fetch(
