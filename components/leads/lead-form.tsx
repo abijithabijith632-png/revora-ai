@@ -80,10 +80,10 @@ export function LeadForm({ mode, leadId, initial }: LeadFormProps) {
     try {
       const payload = {
         ...values,
-        budget: values.budget.trim() === "" ? null : Number(values.budget),
+        budget: values.budget.trim() === "" ? undefined : Number(values.budget),
         expectedClosingDate:
           values.expectedClosingDate.trim() === ""
-            ? null
+            ? undefined
             : values.expectedClosingDate,
       };
 
