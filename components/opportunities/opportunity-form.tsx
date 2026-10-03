@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, FormField, Input, Select, Textarea } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -60,10 +60,37 @@ export function OpportunityForm({
   const { toast } = useToast();
   const [values, setValues] = useState<OpportunityFormValues>(() => toValues(initial));
   const [submitting, setSubmitting] = useState(false);
+  const [dbStages, setDbStages] = useState<Array<{ key: string; name: string }> | null>(null);
+
+  // Offer the organization's configured stages so the form can never submit
+  // a stage key the backend rejects. Falls back to canonical stages.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings/pipeline-stages")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled || !json?.success || !Array.isArray(json.data)) return;
+        const active = json.data
+          .filter((s: { isActive?: boolean }) => s.isActive !== false)
+          .map((s: { key: string; name: string }) => ({ key: s.key, name: s.name }))
+          .filter((s: { key: string }) => typeof s.key === "string" && s.key.length > 0);
+        if (cancelled || !active.length) return;
+        setDbStages(active);
+        setValues((prev) =>
+          active.some((s: { key: string }) => s.key === prev.stageKey)
+            ? prev
+            : { ...prev, stageKey: active[0].key },
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   function set<K extends keyof OpportunityFormValues>(key: K, value: OpportunityFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  const stageOptions = dbStages ?? PIPELINE_STAGES.map((s) => ({ key: s.key, name: s.label }));
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -173,9 +200,9 @@ export function OpportunityForm({
             value={values.stageKey}
             onChange={(e) => set("stageKey", e.target.value)}
           >
-            {PIPELINE_STAGES.map((s) => (
+            {stageOptions.map((s) => (
               <option key={s.key} value={s.key}>
-                {s.label}
+                {s.name}
               </option>
             ))}
           </Select>

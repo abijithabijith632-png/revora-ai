@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { userHasPermission } from "@/lib/permissions/authorize";
 import { OpportunityService } from "@/server/services/opportunities";
 import { PageHeader } from "@/components/ui";
-import { OpportunityKanban } from "@/components/opportunities";
+import { NewPipelineButton, OpportunityKanban } from "@/components/opportunities";
 
 export const metadata = { title: "Pipeline" };
 
@@ -35,16 +35,25 @@ export default async function PipelinePage() {
     stageKey: r.stageKey,
   }));
 
+  const canEdit = await userHasPermission(
+    session.userId,
+    session.organizationId,
+    "pipeline.edit",
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Pipeline"
         description="Visualize your sales pipeline health with drag-and-drop stage movement."
         actions={
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <GitBranch className="h-4 w-4" />
-            Kanban
-          </span>
+          <div className="flex items-center gap-2">
+            {canEdit && <NewPipelineButton />}
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <GitBranch className="h-4 w-4" />
+              Kanban
+            </span>
+          </div>
         }
       />
       <OpportunityKanban cards={cards} />

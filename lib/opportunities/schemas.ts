@@ -74,7 +74,20 @@ export const opportunityFilterSchema = z.object({
   ownerId: z.string().uuid().optional(),
 });
 
+export const pipelineSyncStageSchema = z.object({
+  key: z.enum(STAGE_KEYS),
+  name: z.string().trim().min(1, "Stage name is required.").max(64),
+  probability: z.number().int().min(0).max(100).nullable().optional(),
+  isTerminal: z.boolean().optional(),
+});
+
+export const pipelineSyncSchema = z.object({
+  name: z.string().trim().min(1, "Pipeline name is required.").max(120),
+  stages: z.array(pipelineSyncStageSchema).min(1, "At least one stage is required.").max(20),
+});
+
 export type CreateOpportunityInput = z.infer<typeof createOpportunitySchema>;
 export type UpdateOpportunityInput = z.infer<typeof updateOpportunitySchema>;
 export type OpportunityStageInput = z.infer<typeof opportunityStageSchema>;
 export type OpportunityFilter = z.infer<typeof opportunityFilterSchema>;
+export type PipelineSyncInput = z.infer<typeof pipelineSyncSchema>;

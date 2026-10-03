@@ -7,6 +7,7 @@ import { opportunities, users } from "@/db/schema";
 import { recordAudit } from "@/lib/api/audit";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { canTransition, stageProbability, type PipelineStageKey } from "@/lib/opportunities/pipeline";
+import { PipelineConfigService } from "./pipeline-config";
 import type { Pagination, Sort } from "@/lib/api/query";
 import type {
   CreateOpportunityInput,
@@ -90,12 +91,21 @@ export class OpportunityService extends BaseService {
     if (user.status !== "active") throw new ValidationError("Owner must be an active user.");
   }
 
+  private async resolveStageId(stageKey: string): Promise<string> {
+    // Organizations created before stage provisioning have zero rows while
+    // the UI offers canonical stages — seed defaults on demand so valid
+    // stage keys always resolve. Never touches configured orgs.
+    await new PipelineConfigService(this.repo.orgId).ensureDefaultStages();
+    const stageId = await this.repo.findStageIdByKey(stageKey);
+    if (!stageId) throw new ValidationError("Invalid pipeline stage.");
+    return stageId;
+  }
+
   async create(actor: { userId: string }, input: CreateOpportunityInput) {
     await this.validateClient(input.clientId);
     await this.validateOwner(input.ownerId);
 
-    const stageId = await this.repo.findStageIdByKey(input.stageKey);
-    if (!stageId) throw new ValidationError("Invalid pipeline stage.");
+    const stageId = await this.resolveStageId(input.stageKey);
 
     const opportunityNumber = await this.nextOpportunityNumber();
     const probability = input.probability ?? stageProbability(input.stageKey);
@@ -151,8 +161,7 @@ export class OpportunityService extends BaseService {
 
     let stageId: string | null = existing.stageId;
     if (input.stageKey && input.stageKey !== existing.stageKey) {
-      const nextStageId = await this.repo.findStageIdByKey(input.stageKey);
-      if (!nextStageId) throw new ValidationError("Invalid pipeline stage.");
+      const nextStageId = await this.resolveStageId(input.stageKey);
       if (!canTransition(existing.stageKey as PipelineStageKey, input.stageKey)) {
         throw new ForbiddenError("That pipeline transition is not allowed.");
       }
@@ -211,8 +220,7 @@ export class OpportunityService extends BaseService {
       throw new ValidationError("A loss reason is required when moving to Lost.");
     }
 
-    const newStageId = await this.repo.findStageIdByKey(input.stageKey);
-    if (!newStageId) throw new ValidationError("Invalid pipeline stage.");
+    const newStageId = await this.resolveStageId(input.stageKey);
 
     const newProbability =
       input.probability ?? stageProbability(input.stageKey);
