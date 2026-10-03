@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
 // Never run destructive/auth-mutating suites against production unless explicitly allowed.
-const isProdTarget = /revora-ai-omega\.vercel\.app/.test(baseURL);
+const isProdTarget = /revora-ai-omega\.vercel\.app|she-software-solutions-crm\.vercel\.app/.test(baseURL);
 const testIgnore = isProdTarget && process.env.PLAYWRIGHT_ALLOW_PROD !== '1' ? [/revora-e2e\.spec\.ts/] : [];
 
 export default defineConfig({
