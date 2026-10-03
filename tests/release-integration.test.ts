@@ -108,28 +108,3 @@ test("agent routes derive org from session, enforce permission + rate limit", ()
   assert.match(actionRoute, /confirmed/);
   assert.match(actionRoute, /recordAudit/);
 });
-
-test("sequence service scopes every query by organizationId", () => {
-  const src = readRel("server/services/sales-sequences.ts");
-  const scoped = (src.match(/organizationId/g) ?? []).length;
-  assert.ok(scoped >= 10, `expected org scoping, found ${scoped}`);
-  assert.ok(!src.includes("req.body.organization"), "service must not take org from client body");
-});
-
-test("sequence migration declares org fk + unique enrollment guard", () => {
-  const sql = readRel("db/migrations/0011_sales_sequences.sql");
-  assert.match(sql, /sales_sequences/);
-  assert.match(sql, /sales_sequence_enrollments/);
-  assert.match(sql, /sales_sequence_executions/);
-  assert.match(sql, /organization_id/);
-  assert.match(sql, /sales_sequence_enrollment_unique_idx/);
-  assert.match(sql, /sales_sequence_execution_once_idx/);
-});
-
-test("sequence drizzle schema matches migration tables", () => {
-  const schema = readRel("db/schema/sequences.ts");
-  assert.match(schema, /sales_sequences/);
-  assert.match(schema, /sales_sequence_enrollments/);
-  assert.match(schema, /sales_sequence_executions/);
-  assert.match(schema, /organizationId/);
-});

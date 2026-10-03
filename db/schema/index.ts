@@ -7,5 +7,4 @@ export * from "./opportunities";
 export * from "./operations";
 export * from "./ai";
 export * from "./system";
-export * from "./sequences";
 export * from "./enums";

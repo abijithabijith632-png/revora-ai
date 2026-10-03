@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { z } from "zod";
 import {
   createLeadSchema,
   updateLeadStatusSchema,
@@ -47,29 +46,6 @@ test("qualification schema requires full BANT-like evidence", () => {
     createQualificationSchema.safeParse({ ...good, outcome: "bogus" }).success,
     false,
   );
-});
-
-test("sequence step validation: email/wait/followup/activity/review only, drafts never auto-send", () => {
-  const step = z.object({
-    type: z.enum(["email", "wait", "followup", "activity", "review"]),
-    label: z.string().trim().min(1).max(160),
-    delayMinutes: z.number().int().min(1).max(525600).optional(),
-    description: z.string().max(2000).optional(),
-  });
-  const schema = z.object({
-    name: z.string().trim().min(1).max(160),
-    description: z.string().max(2000).optional(),
-    steps: z.array(step).min(1).max(30),
-  });
-  assert.equal(
-    schema.safeParse({ name: "Nurture", steps: [{ type: "email", label: "Intro" }] }).success,
-    true,
-  );
-  assert.equal(
-    schema.safeParse({ name: "Nurture", steps: [{ type: "send_sms_blast", label: "x" }] }).success,
-    false,
-  );
-  assert.equal(schema.safeParse({ name: "", steps: [] }).success, false);
 });
 
 test("pagination + id schemas guard list/detail endpoints", () => {
