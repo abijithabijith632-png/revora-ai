@@ -314,21 +314,26 @@ export async function getProfile(userId: string): Promise<AuthSession | null> {
   return session && session.userId === userId ? session : null;
 }
 
-export async function updateProfile(userId: string, input: UpdateProfileInput) {
+export async function updateProfile(userId: string, organizationId: string, input: UpdateProfileInput) {
   const [updated] = await db
     .update(users)
     .set({
       ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
       ...(input.jobTitle !== undefined ? { jobTitle: input.jobTitle } : {}),
-      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+      ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl || null } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
+      ...(input.location !== undefined ? { location: input.location || null } : {}),
     })
-    .where(eq(users.id, userId))
+    .where(and(eq(users.id, userId), eq(users.organizationId, organizationId)))
     .returning({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
       jobTitle: users.jobTitle,
       avatarUrl: users.avatarUrl,
+      phone: users.phone,
+      location: users.location,
       organizationId: users.organizationId,
       status: users.status,
     });

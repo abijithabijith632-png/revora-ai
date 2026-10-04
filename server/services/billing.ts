@@ -63,7 +63,7 @@ export class BillingService extends BaseService {
     // Enforce payment provider for paid upgrades.
     if (plan.priceMonthly != null && !paymentProvider.isConfigured()) {
       throw new ForbiddenError(
-        "Payment integration is not configured. Set PAYMENT_PROVIDER_API_KEY to enable paid plan changes.",
+        "Paid plan changes are unavailable because no payment provider is connected. No subscription change was made.",
       );
     }
 

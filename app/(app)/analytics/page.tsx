@@ -1,15 +1,26 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
+import { userHasPermission } from "@/lib/permissions/authorize";
+import { listOrgUsers } from "@/lib/permissions/rbac-service";
 import { PageHeader, Card, CardContent, CardHeader, CardTitle, CardDescription, KpiCard, Badge } from "@/components/ui";
 import { AnalyticsService } from "@/server/services/analytics";
 import { ForecastingService } from "@/server/services/forecasting";
 import { formatMoney } from "@/lib/money";
 import { GenerateAiAlertsButton } from "@/components/analytics/generate-ai-alerts-button";
+import { AnalyticsCharts } from "@/components/analytics/analytics-charts";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
   const session = await requireSession();
+  const allowed = await userHasPermission(
+    session.userId,
+    session.organizationId,
+    "analytics.view",
+  );
+  if (!allowed) redirect("/forbidden");
+
   const analytics = new AnalyticsService(session.organizationId);
   const forecasting = new ForecastingService(session.organizationId);
 
@@ -24,12 +35,38 @@ export default async function AnalyticsPage() {
       forecasting.pipelineIntelligence(),
     ]);
 
+  // Executive performance rows: Sales Executives see only themselves, matching
+  // the /api/analytics/performance scoping; others see the whole team.
+  const isExecutive =
+    session.roleNames.includes("Sales Executive") &&
+    !session.roleNames.includes("Admin") &&
+    !session.roleNames.includes("Super Admin") &&
+    !session.roleNames.includes("Sales Manager");
+  const team = isExecutive
+    ? [{ id: session.userId, fullName: session.fullName }]
+    : (await listOrgUsers(session.organizationId))
+        .filter((user) => user.status === "active" && user.roles.some((role) => role.name === "Sales Executive"));
+  const execRows = await Promise.all(
+    team.map(async (u) => {
+      const perf = await analytics.performance(u.id);
+      return {
+        id: u.id,
+        name: u.fullName,
+        won: perf.won,
+        lost: perf.lost,
+        revenue: perf.revenue,
+      };
+    }),
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Analytics"
         description="Executive dashboard, funnel, forecasting, and risk."
       />
+
+      <AnalyticsCharts execRows={execRows} />
 
       <section aria-label="KPIs" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Total Leads" value={String(dashboard.totalLeads)} />

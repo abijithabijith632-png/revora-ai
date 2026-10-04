@@ -58,7 +58,10 @@ export const changePasswordSchema = z
 export const updateProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(255).optional(),
   jobTitle: z.string().trim().max(128).optional().nullable(),
-  avatarUrl: z.string().url().max(512).optional().nullable(),
+  department: z.string().trim().max(128).optional().nullable(),
+  avatarUrl: z.string().trim().max(512).optional().nullable(),
+  phone: z.string().trim().max(32).optional().nullable(),
+  location: z.string().trim().max(128).optional().nullable(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

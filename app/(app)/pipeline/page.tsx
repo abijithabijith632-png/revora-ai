@@ -18,10 +18,13 @@ export default async function PipelinePage() {
   if (!allowed) redirect("/forbidden");
 
   const service = new OpportunityService(session.organizationId);
-  const { rows } = await service.list({
-    pagination: { page: 1, pageSize: 1000, offset: 0 },
-    sort: { column: "createdAt", order: "desc" },
-  });
+  const [{ rows }, stages] = await Promise.all([
+    service.list({
+      pagination: { page: 1, pageSize: 1000, offset: 0 },
+      sort: { column: "createdAt", order: "desc" },
+    }),
+    service.listStages(),
+  ]);
 
   const cards = rows.map((r) => ({
     id: r.id,
@@ -56,7 +59,7 @@ export default async function PipelinePage() {
           </div>
         }
       />
-      <OpportunityKanban cards={cards} />
+      <OpportunityKanban cards={cards} stages={stages} />
     </div>
   );
 }

@@ -1,36 +1,46 @@
-/**
- * Isolated DB verification (read-only by default).
- *
- * Usage:
- *   TEST_DATABASE_URL=postgres://... npm run verify:isolated-db
- *   TEST_DATABASE_URL=postgres://... npm run verify:isolated-db -- --apply
- *
- * Safety:
- * - Never reads DATABASE_URL; requires explicit TEST_DATABASE_URL.
- * - Refuses to run against production hosts unless ALLOW_PROD_DB=1.
- * - Default mode only checks connectivity + 0011 tables + migration journal.
- * - --apply runs `drizzle-kit migrate` ONLY against the isolated URL.
- */
+/** Read-only verification of the isolated database against the current Drizzle schema. */
 
+const EXPECTED_HOST = "ep-muddy-cherry-b5tgb59p-pooler.c-7.us-east-2.aws.neon.tech";
+const EXPECTED_DATABASE = "neondb";
 const PROD_MARKERS = ["revora-ai-omega", "autumn-king"];
+
+async function getCurrentSchemaTables() {
+  const schema = await import("../db/schema");
+  const { getTableConfig } = await import("drizzle-orm/pg-core");
+  return Object.values(schema).flatMap((value) => {
+    try {
+      const table = getTableConfig(value as Parameters<typeof getTableConfig>[0]);
+      return [{ name: table.name, columns: table.columns.map((column) => column.name) }];
+    } catch {
+      return [];
+    }
+  });
+}
 
 async function main() {
   const testUrl = process.env.TEST_DATABASE_URL ?? "";
   if (!testUrl) {
-    console.error("Set TEST_DATABASE_URL to an isolated PostgreSQL database. Refusing to use DATABASE_URL.");
+    console.error("Set TEST_DATABASE_URL to the isolated database. Refusing to use DATABASE_URL.");
     process.exit(2);
   }
-  let host = "unknown";
+
+  let target: URL;
   try {
-    host = new URL(testUrl).host;
+    target = new URL(testUrl);
   } catch {
     console.error("TEST_DATABASE_URL is not a valid URL.");
     process.exit(2);
+    return;
   }
-  console.log(`Target host: ${host}`);
-  const isProdLike = PROD_MARKERS.some((m) => host.includes(m));
-  if (isProdLike && process.env.ALLOW_PROD_DB !== "1") {
-    console.error("Target looks like production. Set ALLOW_PROD_DB=1 only with an approved backup + release procedure.");
+  const host = target.host;
+  const database = target.pathname.replace(/^\//, "");
+  console.log(`Target host/database: ${host} / ${database}`);
+  if (host !== EXPECTED_HOST || database !== EXPECTED_DATABASE) {
+    console.error("Target does not match the isolated SHE CRM TEST database.");
+    process.exit(2);
+  }
+  if (PROD_MARKERS.some((marker) => host.includes(marker))) {
+    console.error("Target matches a production host marker.");
     process.exit(2);
   }
 
@@ -39,37 +49,51 @@ async function main() {
   await client.connect();
   try {
     await client.query("SELECT 1");
-    console.log("connectivity: ok");
+    console.log("connection: PASS");
 
-    const seq = await client.query(
-      "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'sales_sequence%' ORDER BY tablename",
+    const expectedTables = await getCurrentSchemaTables();
+    const actual = await client.query(
+      "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'",
     );
-    console.log(`sequence tables: ${JSON.stringify(seq.rows.map((r: { tablename: string }) => r.tablename))}`);
-
-    const journal = await import("node:fs").then((fs) =>
-      JSON.parse(fs.readFileSync("db/migrations/meta/_journal.json", "utf8")),
-    );
-    const last = journal.entries[journal.entries.length - 1];
-    console.log(`journal entries: ${journal.entries.length}, last: ${last.tag}`);
-
-    const hasAll = ["sales_sequences", "sales_sequence_enrollments", "sales_sequence_executions"].every((t) =>
-      seq.rows.some((r: { tablename: string }) => r.tablename === t),
-    );
-    if (hasAll) {
-      console.log("0011_sales_sequences: APPLIED");
-    } else {
-      console.log("0011_sales_sequences: MISSING — run with --apply against this isolated DB only, then re-verify.");
-      if (process.argv.includes("--apply")) {
-        console.log("Apply requested: run `TEST_DATABASE_URL=... npx drizzle-kit migrate` in a shell pointed at this DB.");
-      }
-      process.exitCode = 1;
+    const actualColumns = new Map<string, Set<string>>();
+    for (const row of actual.rows as Array<{ table_name: string; column_name: string }>) {
+      const columns = actualColumns.get(row.table_name) ?? new Set<string>();
+      columns.add(row.column_name);
+      actualColumns.set(row.table_name, columns);
     }
+
+    const missingTables: string[] = [];
+    const missingColumns: string[] = [];
+    for (const table of expectedTables) {
+      const columns = actualColumns.get(table.name);
+      if (!columns) {
+        missingTables.push(table.name);
+        continue;
+      }
+      for (const column of table.columns) {
+        if (!columns.has(column)) missingColumns.push(`${table.name}.${column}`);
+      }
+    }
+
+    console.log(`current schema tables expected: ${expectedTables.length}`);
+    console.log(`missing required tables: ${JSON.stringify(missingTables)}`);
+    console.log(`missing required columns: ${JSON.stringify(missingColumns)}`);
+    console.log(`users.phone: ${actualColumns.get("users")?.has("phone") ? "PASS" : "FAIL"}`);
+    console.log(`users.location: ${actualColumns.get("users")?.has("location") ? "PASS" : "FAIL"}`);
+    const obsoleteTables = await client.query(
+      "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'sales_sequence%' ORDER BY tablename",
+    );
+    console.log(`Sales Sequence tables present: ${JSON.stringify(obsoleteTables.rows.map((row: { tablename: string }) => row.tablename))}`);
+    console.log("Sales Sequence tables required: no");
+    console.log("Production database: not accessed; DATABASE_URL is not read");
+    if (missingTables.length || missingColumns.length) process.exitCode = 1;
   } finally {
     await client.end();
   }
 }
 
-main().catch((e) => {
-  console.error(`verify failed: ${(e as Error).message.slice(0, 300)}`);
+main().catch((error) => {
+  const err = error as Error;
+  console.error(`verify failed: ${err.name}: ${err.message.slice(0, 300)}`);
   process.exit(1);
 });

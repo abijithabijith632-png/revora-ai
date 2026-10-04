@@ -69,6 +69,17 @@ export class EmailTemplateRepository extends TenantRepository {
     return row ?? null;
   }
 
+  async findActiveByName(name: string, exceptId?: string) {
+    const conditions = [this.baseWhere(), eq(emailTemplates.isArchived, false), sql`lower(${emailTemplates.name}) = lower(${name})`];
+    if (exceptId) conditions.push(sql`${emailTemplates.id} <> ${exceptId}`);
+    const [row] = await this.db
+      .select({ id: emailTemplates.id })
+      .from(emailTemplates)
+      .where(and(...conditions))
+      .limit(1);
+    return row ?? null;
+  }
+
   async create(input: {
     category: string;
     name: string;

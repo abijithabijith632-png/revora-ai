@@ -4,11 +4,13 @@ import { useState } from "react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, FormField, Input, Select, Textarea } from "@/components/ui";
 
 const agentLabels: Record<string, string> = { lead: "Lead Agent", deal: "Deal Agent", account: "Research / Account Agent", followup: "Follow-up Agent", forecast: "Forecast Agent", meeting: "Meeting Agent" };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type AgentResult = { agentId: string; label: string; summary: string; findings: string[]; recommendation: string; suggestedFollowup?: { contact: string; channel: string; message: string; priority: string }; proposedAction: { type: string; title: string; reason: string }; method: string; generatedAt: string; requiresConfirmation: boolean };
 
 async function callApi<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const json = await response.json();
+  const json = await response.json().catch(() => null);
   if (!response.ok || !json.success) throw new Error(json.error?.message ?? "AI agent request failed.");
   return json.data as T;
 }
@@ -22,20 +24,42 @@ export function AgentWorkspace({ allowedAgentIds }: { allowedAgentIds: string[] 
   const hasTarget = !["followup", "forecast"].includes(agentId); const actionType = result?.proposedAction.type;
 
   async function run(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError(""); setResult(null); setActionResult(null);
+    event.preventDefault();
+    if (busy) return;
+    if (hasTarget && !UUID_RE.test(targetId.trim())) {
+      setError("Enter a valid CRM record ID (UUID).");
+      return;
+    }
+    setBusy(true); setError(""); setResult(null); setActionResult(null);
     try {
-      const data = await callApi<AgentResult>("/api/agents/" + agentId, { ...(hasTarget ? { targetId } : {}) });
+      const data = await callApi<AgentResult>("/api/agents/" + agentId, { ...(hasTarget ? { targetId: targetId.trim() } : {}) });
       setResult(data); setTitle(data.proposedAction.title); setDescription(data.proposedAction.reason);
     } catch (e) { setError(e instanceof Error ? e.message : "Agent is unavailable."); } finally { setBusy(false); }
   }
   async function confirmAction() {
-    if (!result || !actionType || actionType === "none") return;
+    if (!result || !actionType || actionType === "none" || actionBusy) return;
+    if (hasTarget && !UUID_RE.test(targetId.trim())) {
+      setError("Enter a valid CRM record ID (UUID).");
+      return;
+    }
+    if (targetUserId.trim() && !UUID_RE.test(targetUserId.trim())) {
+      setError("Enter a valid assignee user ID (UUID).");
+      return;
+    }
+    let dueIso: string | undefined;
+    if (dueAt.trim()) {
+      if (Number.isNaN(Date.parse(dueAt))) {
+        setError("Enter a valid due date.");
+        return;
+      }
+      dueIso = new Date(dueAt).toISOString();
+    }
     setActionBusy(true); setError(""); setActionResult(null);
     try {
       const response = await callApi<Record<string, unknown>>("/api/agents/actions", {
-        agentId, ...(hasTarget ? { targetId } : {}), actionType, confirmed: true, title, description,
-        ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}), channel, priority: "medium",
-        ...(targetUserId ? { targetUserId } : {}), purpose: "general_follow_up",
+        agentId, ...(hasTarget ? { targetId: targetId.trim() } : {}), actionType, confirmed: true, title, description,
+        ...(dueIso ? { dueAt: dueIso } : {}), channel, priority: "medium",
+        ...(targetUserId.trim() ? { targetUserId: targetUserId.trim() } : {}), purpose: "general_follow_up",
       });
       setActionResult(response);
       if (response.draft && typeof response.draft === "object") {
@@ -49,8 +73,8 @@ export function AgentWorkspace({ allowedAgentIds }: { allowedAgentIds: string[] 
   return <div className="space-y-6">
     <Card><CardHeader><CardTitle>CRM agents</CardTitle><CardDescription>Agents analyze authorized CRM records and prepare recommendations. They do not mutate records until you confirm a supported action.</CardDescription></CardHeader>
       <CardContent><form onSubmit={run} className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <FormField label="Agent" htmlFor="agent-id"><Select id="agent-id" value={agentId} onChange={(e) => { setAgentId(e.target.value); setResult(null); setActionResult(null); }} aria-label="Choose an AI agent">{allowedAgentIds.map((id) => <option key={id} value={id}>{agentLabels[id]}</option>)}</Select></FormField>
-        {hasTarget ? <FormField label="CRM record ID" htmlFor="agent-target"><Input id="agent-target" value={targetId} onChange={(e) => setTargetId(e.target.value)} required placeholder="Paste the authorized record ID" /></FormField> : <p className="self-end pb-2 text-sm text-muted-foreground">{agentId === "forecast" ? "Uses organization pipeline and forecast data." : "Uses your assigned tasks, follow-ups, and meetings."}</p>}
+        <FormField label="Agent" htmlFor="agent-id"><Select id="agent-id" value={agentId} disabled={busy || actionBusy} onChange={(e) => { setAgentId(e.target.value); setResult(null); setActionResult(null); setError(""); }} aria-label="Choose an AI agent">{allowedAgentIds.map((id) => <option key={id} value={id}>{agentLabels[id]}</option>)}</Select></FormField>
+        {hasTarget ? <FormField label="CRM record ID" htmlFor="agent-target"><Input id="agent-target" value={targetId} disabled={busy || actionBusy} onChange={(e) => { setTargetId(e.target.value); setResult(null); setActionResult(null); setError(""); }} required placeholder="Paste the authorized record ID" /></FormField> : <p className="self-end pb-2 text-sm text-muted-foreground">{agentId === "forecast" ? "Uses organization pipeline and forecast data." : "Uses your assigned tasks, follow-ups, and meetings."}</p>}
         <div className="sm:col-span-2"><Button type="submit" disabled={busy || (hasTarget && !targetId.trim())}>{busy ? "Analyzing…" : "Run agent"}</Button></div>
       </form></CardContent>
     </Card>

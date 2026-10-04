@@ -22,6 +22,18 @@ export class AnalyticsService extends BaseService {
     return this.repo.leadsOverTime(days ?? 30);
   }
 
+  async opportunitiesOverTime(days?: number) {
+    return this.repo.opportunitiesOverTime(days ?? 30);
+  }
+
+  async leadsByStatus() {
+    return this.repo.leadsByStatus();
+  }
+
+  async aiScoreDistribution() {
+    return this.repo.aiScoreDistribution();
+  }
+
   async funnel() {
     return this.repo.funnel();
   }

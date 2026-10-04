@@ -30,3 +30,21 @@ export async function PATCH(
     return failure(error);
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await requireApiContext("users.edit");
+    const id = await parsePathId(params);
+    const service = new UserAdminService(session.organizationId);
+    const row = await service.remove(
+      { userId: session.userId, roleNames: session.roleNames },
+      id,
+    );
+    return success(row, { message: "User removed." });
+  } catch (error) {
+    return failure(error);
+  }
+}

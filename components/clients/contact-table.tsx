@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Star, Search } from "lucide-react";
 import {
@@ -84,9 +84,17 @@ export function ContactTable({
     }
   }, [page, meta.pageSize, search]);
 
+  // The server-rendered `initialRows` already match the current URL state on
+  // every mount, so only re-fetch when the user actually changes a
+  // filter/page value — this avoids a duplicate list request on navigation.
+  const stateKey = [page, meta.pageSize, search].join("|");
+  const fetchedKey = useRef(stateKey);
+
   useEffect(() => {
-    fetchRows();
-  }, [fetchRows]);
+    if (stateKey === fetchedKey.current) return;
+    fetchedKey.current = stateKey;
+    void fetchRows();
+  }, [stateKey, fetchRows]);
 
   return (
     <Card>

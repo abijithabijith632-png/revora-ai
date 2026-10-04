@@ -161,10 +161,51 @@ export class OpportunityRepository extends TenantRepository {
         and(
           eq(pipelineStages.organizationId, this.organizationId),
           eq(pipelineStages.key, key),
+          eq(pipelineStages.isActive, true),
         ),
       )
       .limit(1);
     return row?.id ?? null;
+  }
+
+  async findActiveStageByKey(key: string) {
+    const [row] = await this.db
+      .select({
+        id: pipelineStages.id,
+        key: pipelineStages.key,
+        probability: pipelineStages.probability,
+        isTerminal: pipelineStages.isTerminal,
+        orderIndex: pipelineStages.orderIndex,
+      })
+      .from(pipelineStages)
+      .where(and(
+        eq(pipelineStages.organizationId, this.organizationId),
+        eq(pipelineStages.key, key),
+        eq(pipelineStages.isActive, true),
+      ))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Verify a resolved stage id still belongs to this organization. */
+  async findStageById(stageId: string) {
+    const [row] = await this.db
+      .select({
+        id: pipelineStages.id,
+        key: pipelineStages.key,
+        name: pipelineStages.name,
+        isActive: pipelineStages.isActive,
+        isTerminal: pipelineStages.isTerminal,
+      })
+      .from(pipelineStages)
+      .where(
+        and(
+          eq(pipelineStages.id, stageId),
+          eq(pipelineStages.organizationId, this.organizationId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   async findById(id: string) {

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { userHasPermission } from "@/lib/permissions/authorize";
-import { LeadConfigService } from "@/server/services/lead-config";
 import { LEAD_STATUSES } from "@/lib/leads/schemas";
 import { PageHeader, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@/components/ui";
+import { LeadConfigManager } from "@/components/admin/lead-config-manager";
 
 export const metadata = { title: "Lead Statuses" };
 
@@ -11,9 +11,6 @@ export default async function LeadStatusesPage() {
   const session = await requireSession();
   const allowed = await userHasPermission(session.userId, session.organizationId, "lead_statuses.view");
   if (!allowed) redirect("/forbidden");
-
-  const service = new LeadConfigService(session.organizationId);
-  const custom = await service.listStatuses();
 
   return (
     <div className="space-y-6">
@@ -42,17 +39,7 @@ export default async function LeadStatusesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {custom.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No custom statuses defined.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {custom.map((s) => (
-                <Badge key={s.id} variant={s.isActive ? "success" : "neutral"} dot>
-                  {s.label} ({s.key})
-                </Badge>
-              ))}
-            </div>
-          )}
+          <LeadConfigManager kind="statuses" />
         </CardContent>
       </Card>
     </div>

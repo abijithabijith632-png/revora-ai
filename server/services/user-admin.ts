@@ -1,12 +1,11 @@
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { BaseService } from "./base";
-import { users, userRoles, roles } from "@/db/schema";
+import { sessions, users, userRoles, roles } from "@/db/schema";
 import { recordAudit } from "@/lib/api/audit";
 import { hashPassword } from "@/lib/auth/password";
 import { generateToken, hashToken } from "@/lib/auth/tokens";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
-import { getUserRoleNames } from "@/lib/permissions/authorize";
 import { InvitationRepository } from "@/server/repositories/invitations";
 
 const INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -31,12 +30,16 @@ export class UserAdminService extends BaseService {
     const where = params.search
       ? and(
           eq(users.organizationId, this.organizationId),
+          eq(users.isDeleted, false),
           or(
             ilike(users.fullName, `%${params.search}%`),
             ilike(users.email, `%${params.search}%`),
           )!,
         )
-      : eq(users.organizationId, this.organizationId);
+      : and(
+          eq(users.organizationId, this.organizationId),
+          eq(users.isDeleted, false),
+        );
 
     const rows = await db
       .select({
@@ -195,43 +198,35 @@ export class UserAdminService extends BaseService {
     targetUserId: string,
     status: UserStatus,
   ) {
-    const target = await db.query.users.findFirst({
-      where: and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId)),
-    });
-    if (!target) throw new NotFoundError("User not found.");
-
     // Prevent self-deactivation / self-suspension.
     if (actor.userId === targetUserId && status !== "active") {
       throw new ForbiddenError("You cannot deactivate your own account.");
     }
 
-    // Prevent deactivating the last active admin.
-    if (status !== "active" && target.status === "active") {
-      const targetRoles = await getUserRoleNames(targetUserId, this.organizationId);
-      if (targetRoles.includes("Super Admin") || targetRoles.includes("Admin")) {
-        const activeAdmins = await db
-          .select({ id: users.id })
-          .from(users)
-          .innerJoin(userRoles, eq(userRoles.userId, users.id))
+    const row = await db.transaction(async (tx) => {
+      const [target] = await tx.select().from(users)
+        .where(and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId), eq(users.isDeleted, false)))
+        .for("update");
+      if (!target) throw new NotFoundError("User not found.");
+
+      if (status !== "active" && target.status === "active") {
+        const adminRoleUsers = tx.select({ userId: userRoles.userId })
+          .from(userRoles)
           .innerJoin(roles, eq(roles.id, userRoles.roleId))
-          .where(
-            and(
-              eq(users.organizationId, this.organizationId),
-              eq(users.status, "active"),
-              or(eq(roles.name, "Super Admin"), eq(roles.name, "Admin"))!,
-            ),
-          );
-        if (activeAdmins.length <= 1) {
+          .where(and(eq(roles.organizationId, this.organizationId), or(eq(roles.name, "Admin"), eq(roles.name, "Super Admin"))!));
+        const activeAdmins = await tx.select({ id: users.id }).from(users)
+          .where(and(eq(users.organizationId, this.organizationId), eq(users.status, "active"), eq(users.isDeleted, false), inArray(users.id, adminRoleUsers)))
+          .for("update");
+        if (activeAdmins.length <= 1 && activeAdmins.some((admin) => admin.id === targetUserId)) {
           throw new ForbiddenError("Cannot deactivate the last active administrator.");
         }
       }
-    }
 
-    const [row] = await db
-      .update(users)
-      .set({ status, updatedAt: new Date() })
-      .where(and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId)))
-      .returning();
+      const [updated] = await tx.update(users).set({ status, updatedAt: new Date() })
+        .where(and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId)))
+        .returning();
+      return { target, updated };
+    });
 
     await recordAudit({
       organizationId: this.organizationId,
@@ -239,8 +234,57 @@ export class UserAdminService extends BaseService {
       action: "status_change",
       entityType: "user",
       entityId: targetUserId,
-      metadata: { from: target.status, to: status },
+      metadata: { from: row.target.status, to: status },
     });
-    return row;
+    return row.updated;
+  }
+
+  /**
+   * Remove a user from the organization (soft-delete). Clears role grants
+   * and sessions so the removed user loses access immediately, while
+   * preserving historical audit/assignment records. Guards self-removal
+   * and the last active administrator.
+   */
+  async remove(
+    actor: { userId: string; roleNames: string[] },
+    targetUserId: string,
+  ) {
+    const target = await db.query.users.findFirst({
+      where: and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId)),
+    });
+    if (!target || target.isDeleted) throw new NotFoundError("User not found.");
+
+    if (actor.userId === targetUserId) {
+      throw new ForbiddenError("You cannot remove your own account.");
+    }
+
+    await db.transaction(async (tx) => {
+      const adminRoleUsers = tx.select({ userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(roles.id, userRoles.roleId))
+        .where(and(eq(roles.organizationId, this.organizationId), or(eq(roles.name, "Admin"), eq(roles.name, "Super Admin"))!));
+      const activeAdmins = await tx.select({ id: users.id }).from(users)
+        .where(and(eq(users.organizationId, this.organizationId), eq(users.status, "active"), eq(users.isDeleted, false), inArray(users.id, adminRoleUsers)))
+        .for("update");
+      if (activeAdmins.some((admin) => admin.id === targetUserId) && activeAdmins.length <= 1) {
+        throw new ForbiddenError("Cannot remove the last active administrator.");
+      }
+      await tx
+        .update(users)
+        .set({ isDeleted: true, deletedAt: new Date(), status: "inactive", updatedAt: new Date() })
+        .where(and(eq(users.id, targetUserId), eq(users.organizationId, this.organizationId)));
+      await tx.delete(userRoles).where(eq(userRoles.userId, targetUserId));
+      await tx.delete(sessions).where(eq(sessions.userId, targetUserId));
+    });
+
+    await recordAudit({
+      organizationId: this.organizationId,
+      userId: actor.userId,
+      action: "delete",
+      entityType: "user",
+      entityId: targetUserId,
+      metadata: { email: target.email },
+    });
+    return { id: targetUserId };
   }
 }

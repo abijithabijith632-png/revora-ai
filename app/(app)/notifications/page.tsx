@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { requireSession } from "@/lib/auth";
-import { PageHeader, Badge, Card, CardContent } from "@/components/ui";
+import { PageHeader, Card, CardContent } from "@/components/ui";
 import { NotificationService } from "@/server/services/notifications";
-import { notificationTypeLabel } from "@/lib/operations/presentation";
+import { NotificationList } from "@/components/operations";
 
 export const dynamic = "force-dynamic";
 
@@ -26,46 +25,22 @@ export default async function NotificationsPage() {
         <CardContent className="pt-6">
           {rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No notifications yet.
+              No notifications yet. Assignments, due tasks, upcoming meetings,
+              and deal updates will appear here.
             </p>
           ) : (
-            <ul className="divide-y divide-border">
-              {rows.map((n) => {
-                const href =
-                  n.relatedEntityType && n.relatedEntityId
-                    ? `/${n.relatedEntityType}s/${n.relatedEntityId}`
-                    : null;
-                const inner = (
-                  <div className="flex gap-3 py-3">
-                    <Badge variant={n.isRead ? "neutral" : "info"}>
-                      {notificationTypeLabel(n.type)}
-                    </Badge>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">{n.title}</p>
-                      {n.message && (
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                          {n.message}
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs text-faint">
-                        {new Date(n.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                );
-                return (
-                  <li key={n.id} className={n.isRead ? "opacity-70" : ""}>
-                    {href ? (
-                      <Link href={href} className="block hover:bg-surface-subtle">
-                        {inner}
-                      </Link>
-                    ) : (
-                      inner
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <NotificationList
+              initial={rows.map((n) => ({
+                id: n.id,
+                type: n.type,
+                title: n.title,
+                message: n.message,
+                isRead: n.isRead,
+                relatedEntityType: n.relatedEntityType,
+                relatedEntityId: n.relatedEntityId,
+                createdAt: n.createdAt.toISOString(),
+              }))}
+            />
           )}
         </CardContent>
       </Card>

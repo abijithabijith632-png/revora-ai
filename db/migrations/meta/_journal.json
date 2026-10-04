@@ -85,6 +85,13 @@
       "when": 1790899200000,
       "tag": "0011_sales_sequences",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791098400000,
+      "tag": "0012_user_profile_fields",
+      "breakpoints": true
     }
   ]
 }

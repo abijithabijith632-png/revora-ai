@@ -78,6 +78,15 @@ export class PipelineConfigService extends BaseService {
 
     const existing = await this.repo.list();
     const byKey = new Map(existing.map((row) => [row.key, row]));
+    for (const row of existing) {
+      if (keys.includes(row.key as (typeof keys)[number]) || !row.isActive) continue;
+      const count = await this.repo.countOpportunitiesInStage(row.id);
+      if (count > 0) {
+        throw new ConflictError(
+          `Cannot remove stage "${row.name}" — ${count} opportunity(s) still reference it.`,
+        );
+      }
+    }
     let order = 1;
     for (const stage of input.stages) {
       const canonical = STAGE_BY_KEY.get(stage.key);
@@ -104,12 +113,6 @@ export class PipelineConfigService extends BaseService {
 
     for (const row of existing) {
       if (keys.includes(row.key as (typeof keys)[number]) || !row.isActive) continue;
-      const count = await this.repo.countOpportunitiesInStage(row.id);
-      if (count > 0) {
-        throw new ConflictError(
-          `Cannot remove stage "${row.name}" — ${count} open opportunity(s) still reference it.`,
-        );
-      }
       await this.repo.update(row.id, { isActive: false });
     }
 
@@ -133,7 +136,11 @@ export class PipelineConfigService extends BaseService {
   }) {
     this.validateProbability(input.probability);
     const key = input.key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
-    const row = await this.repo.create({ ...input, key });
+    const name = input.name.trim();
+    if (!key || !name) throw new ValidationError("Stage name and key are required.");
+    if (await this.repo.findByKey(key)) throw new ConflictError("A pipeline stage with this key already exists.");
+    if (await this.repo.findByName(name)) throw new ConflictError("A pipeline stage with this name already exists.");
+    const row = await this.repo.create({ ...input, name, key });
     await recordAudit({
       organizationId: this.repo.orgId,
       userId: actor.userId,
@@ -154,6 +161,12 @@ export class PipelineConfigService extends BaseService {
     this.validateProbability(input.probability);
     const existing = await this.repo.findById(id);
     if (!existing) throw new ValidationError("Stage not found.");
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) throw new ValidationError("Stage name is required.");
+      if (await this.repo.findByName(name, id)) throw new ConflictError("A pipeline stage with this name already exists.");
+      input = { ...input, name };
+    }
 
     if (input.isActive === false) {
       const count = await this.repo.countOpportunitiesInStage(id);

@@ -36,6 +36,9 @@ export function Logo({
         <img
           src={src}
           alt="SHE Software Solutions"
+          width={34}
+          height={32}
+          style={{ width: 34, height: 32 }}
           className="h-8 w-auto"
           draggable={false}
         />
@@ -53,6 +56,9 @@ export function Logo({
       <img
         src={logoSrc}
         alt="SHE Software Solutions"
+        width={34}
+        height={32}
+        style={{ width: 34, height: 32 }}
         className="h-8 w-auto"
         draggable={false}
       />

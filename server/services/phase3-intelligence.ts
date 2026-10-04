@@ -5,7 +5,7 @@ import { activities, aiInsights, clients, communications, contacts, followups, l
 import { aiProvider } from "@/server/ai/provider";
 import { calculateBuyingIntent } from "@/server/ai/buying-intent";
 import { ForecastingService } from "@/server/services/forecasting";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ConfigurationError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { parseAndValidate } from "@/lib/validation";
 
 const resultSchema = z.object({ summary: z.string().min(1).max(700), relationshipStatus: z.string().min(1).max(120), recommendedActions: z.array(z.string().min(1).max(220)).max(5) });
@@ -101,19 +101,18 @@ export class Phase3IntelligenceService {
     const day = start.toISOString().slice(0, 10);
     const freshnessDates = [...mtgs.map((x) => x.updatedAt), ...taskRows.map((x) => x.updatedAt), ...followupRows.map((x) => x.updatedAt), ...leadRows.map((x) => x.updatedAt), ...deals.map((x) => x.updatedAt), ...events.map((x) => x.at), ...recentStageRows.map((x) => x.changedAt)];
     const freshAt = freshnessDates.length ? freshnessDates.reduce((a, b) => a > b ? a : b).toISOString() : null;
-    const [saved] = await db.select({ supportingData: aiInsights.supportingData }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "user"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
+    const [saved] = await db.select({ supportingData: aiInsights.supportingData, createdAt: aiInsights.createdAt }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "user"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
     const old = saved?.supportingData as { day?: string; freshAt?: string; summary?: string; recommendations?: string[] } | null;
-    const brief = old?.day === day && old.freshAt === freshAt ? { summary: old.summary, recommendations: old.recommendations } : null;
+    const brief = old?.day === day && old.freshAt === freshAt ? { summary: old.summary, recommendations: old.recommendations, generatedAt: saved?.createdAt.toISOString() } : null;
     return { day, items: items.map((x) => ({ ...x, dueAt: x.dueAt?.toISOString() ?? null })), meetings: mtgs, opportunities: deals, opportunityRisks, pipelineChanges, overdueFollowups: followupRows.filter((x) => x.dueAt < now), recentActivities: events, sourceFreshAt: freshAt, brief, briefStale: Boolean(saved && !brief), noData: !items.length && !deals.length && !events.length, aiUnavailable: !aiProvider.isConfigured };
   }
   async brief(user: { userId: string; roleNames: string[] }) {
     const d = await this.daily(user);
-    if (d.brief) return { ...d.brief, sourceFreshAt: d.sourceFreshAt, method: "cached", cached: true };
     if (d.noData) return { summary: "Insufficient CRM data to prepare a useful sales brief.", recommendations: [], method: "insufficient_data" };
-    let result = { summary: d.items.length + " priorities today; " + d.overdueFollowups.length + " overdue follow-ups and " + d.meetings.length + " meetings.", recommendations: d.items.slice(0, 4).map((x) => x.reason) }; let model = "deterministic_crm_fallback";
-    if (aiProvider.isConfigured) try { result = parseAndValidate(briefSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Write a concise sales brief using only CRM records. Do not invent facts. Return JSON summary and recommendations.", user: JSON.stringify({ day: d.day, items: d.items.slice(0, 12), meetings: d.meetings, opportunities: d.opportunities, pipelineChanges: d.pipelineChanges, risks: d.opportunityRisks, overdue: d.overdueFollowups }) })); model = aiProvider.model; } catch { model = "deterministic_provider_fallback"; }
-    await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "user", entityId: user.userId, insightType: "next_action", result: result.summary.slice(0, 255), recommendation: result.recommendations.join(" "), supportingData: { day: d.day, freshAt: d.sourceFreshAt, ...result }, modelVersion: model });
-    return { ...result, generatedAt: new Date().toISOString(), method: model };
+    if (!aiProvider.isConfigured) throw new ConfigurationError("AI sales brief generation is unavailable because the AI provider is not configured.");
+    const result = parseAndValidate(briefSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Write a concise sales brief using only CRM records. Do not invent facts. Return JSON summary and recommendations.", user: JSON.stringify({ day: d.day, items: d.items.slice(0, 12), meetings: d.meetings, opportunities: d.opportunities, pipelineChanges: d.pipelineChanges, risks: d.opportunityRisks, overdue: d.overdueFollowups }) }));
+    const [savedBrief] = await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "user", entityId: user.userId, insightType: "next_action", result: result.summary.slice(0, 255), recommendation: result.recommendations.join(" "), supportingData: { day: d.day, freshAt: d.sourceFreshAt, ...result }, modelVersion: aiProvider.model }).returning({ createdAt: aiInsights.createdAt });
+    return { ...result, generatedAt: savedBrief.createdAt.toISOString(), method: aiProvider.model };
   }
   async reps(user: { userId: string; roleNames: string[] }) {
     if (!user.roleNames.some((x) => ["Admin", "Super Admin", "Sales Manager"].includes(x))) throw new ForbiddenError("Manager permission is required.");
@@ -129,25 +128,26 @@ export class Phase3IntelligenceService {
       db.select({ owner: opportunityStageHistory.changedBy }).from(opportunityStageHistory).where(and(eq(opportunityStageHistory.organizationId, this.orgId), gte(opportunityStageHistory.changedAt, since), inArray(opportunityStageHistory.changedBy, ids))).limit(5000),
     ]);
     const result = { periodDays: 30, generatedAt: new Date().toISOString(), insufficientData: !acts.length && !followRows.length && !meetingsRows.length && !movementRows.length, reps: reps.map((r) => ({ id: r.id, name: r.name, metrics: { leadsHandled: leadsRows.filter((x) => x.owner === r.id).length, opportunitiesHandled: deals.filter((x) => x.owner === r.id).length, pipelineAmount: deals.filter((x) => x.owner === r.id).reduce((sum, x) => sum + (x.amount ?? 0), 0), activitiesCompleted: acts.filter((x) => x.owner === r.id).length, followupsCompleted: followRows.filter((x) => x.owner === r.id && x.status === "completed").length, meetings: meetingsRows.filter((x) => x.owner === r.id).length, opportunityMovements: movementRows.filter((x) => x.owner === r.id).length }, interpretation: null })) };
-    const [saved] = await db.select({ supportingData: aiInsights.supportingData }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "sales_rep_coaching"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
+    const [saved] = await db.select({ supportingData: aiInsights.supportingData, createdAt: aiInsights.createdAt }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "sales_rep_coaching"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
     const cache = saved?.supportingData as { signature?: string; coaching?: Array<{ userId: string; insight: string }> } | null;
     const signature = JSON.stringify(result.reps.map((r) => ({ userId: r.id, metrics: r.metrics })));
-    return { ...result, coaching: cache?.signature === signature ? cache.coaching ?? null : null, coachingStale: Boolean(cache && cache.signature !== signature) };
+    return { ...result, coaching: cache?.signature === signature ? cache.coaching ?? null : null, coachingStale: Boolean(cache && cache.signature !== signature), coachingGeneratedAt: cache?.signature === signature ? saved?.createdAt.toISOString() ?? null : null };
   }
   async coachReps(user: { userId: string; roleNames: string[] }) {
     const data = await this.reps(user);
-    if (data.insufficientData || !aiProvider.isConfigured || !data.reps.some((r) => r.metrics.activitiesCompleted + r.metrics.followupsCompleted + r.metrics.meetings >= 3)) return { ...data, coaching: null, aiUnavailable: !aiProvider.isConfigured, insufficientData: true };
+    if (data.insufficientData || !data.reps.some((r) => r.metrics.activitiesCompleted + r.metrics.followupsCompleted + r.metrics.meetings >= 3)) return { ...data, coaching: null, insufficientData: true };
+    if (!aiProvider.isConfigured) return { ...data, coaching: null, aiUnavailable: true, error: "AI coaching is unavailable because the AI provider is not configured." };
     const metrics = data.reps.map((r) => ({ userId: r.id, metrics: r.metrics }));
     const signature = JSON.stringify(metrics);
-    const [prior] = await db.select({ supportingData: aiInsights.supportingData }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "sales_rep_coaching"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
+    const [prior] = await db.select({ supportingData: aiInsights.supportingData, createdAt: aiInsights.createdAt }).from(aiInsights).where(and(eq(aiInsights.organizationId, this.orgId), eq(aiInsights.entityType, "sales_rep_coaching"), eq(aiInsights.entityId, user.userId), eq(aiInsights.insightType, "next_action"))).orderBy(desc(aiInsights.createdAt)).limit(1);
     const saved = prior?.supportingData as { kind?: string; signature?: string; coaching?: Array<{ userId: string; insight: string }> } | null;
-    if (saved?.kind === "sales_rep_coaching" && saved.signature === signature) return { ...data, coaching: saved.coaching, cached: true, aiUnavailable: false };
+    if (saved?.kind === "sales_rep_coaching" && saved.signature === signature) return { ...data, coaching: saved.coaching, coachingGeneratedAt: prior?.createdAt.toISOString() ?? null, cached: true, aiUnavailable: false };
     let coaching: Array<{ userId: string; insight: string }>;
     try {
       const out = parseAndValidate(z.object({ coaching: z.array(z.object({ userId: z.string().uuid(), insight: z.string().min(1).max(300) })).max(150) }), await aiProvider.generateStructured({ jsonMode: true, system: "Give neutral coaching observations using only supplied CRM counts. Do not rank reps, assess personality, or make unsupported performance claims. Return JSON coaching array with userId and one concise insight.", user: JSON.stringify(metrics) }));
       const allowed = new Set(metrics.map((x) => x.userId)); coaching = out.coaching.filter((x) => allowed.has(x.userId));
     } catch { return { ...data, coaching: null, aiUnavailable: true, error: "AI coaching is unavailable." }; }
-    await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "sales_rep_coaching", entityId: user.userId, insightType: "next_action", result: "Sales rep coaching observations", reasons: [], recommendation: "Review CRM activity patterns with context.", supportingData: { kind: "sales_rep_coaching", signature, coaching }, modelVersion: aiProvider.model });
-    return { ...data, coaching, aiUnavailable: false };
+    const [savedCoaching] = await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "sales_rep_coaching", entityId: user.userId, insightType: "next_action", result: "Sales rep coaching observations", reasons: [], recommendation: "Review CRM activity patterns with context.", supportingData: { kind: "sales_rep_coaching", signature, coaching }, modelVersion: aiProvider.model }).returning({ createdAt: aiInsights.createdAt });
+    return { ...data, coaching, coachingGeneratedAt: savedCoaching.createdAt.toISOString(), aiUnavailable: false };
   }
 }

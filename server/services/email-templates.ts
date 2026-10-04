@@ -1,7 +1,7 @@
 import { BaseService } from "./base";
 import { EmailTemplateRepository } from "@/server/repositories/email-templates";
 import { recordAudit } from "@/lib/api/audit";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Pagination, Sort } from "@/lib/api/query";
 import type {
   CreateEmailTemplateInput,
@@ -46,6 +46,9 @@ export class EmailTemplateService extends BaseService {
   }
 
   async create(actor: { userId: string }, input: CreateEmailTemplateInput) {
+    if (await this.repo.findActiveByName(input.name.trim())) {
+      throw new ConflictError("An active template with this name already exists.");
+    }
     const template = await this.repo.create({
       category: input.category,
       name: input.name,
@@ -70,6 +73,10 @@ export class EmailTemplateService extends BaseService {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError("Email template not found.");
 
+    if (input.name !== undefined && await this.repo.findActiveByName(input.name.trim(), id)) {
+      throw new ConflictError("An active template with this name already exists.");
+    }
+
     const updated = await this.repo.update(id, {
       ...(input.category !== undefined ? { category: input.category } : {}),
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
@@ -92,6 +99,11 @@ export class EmailTemplateService extends BaseService {
   async duplicate(actor: { userId: string }, id: string) {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError("Email template not found.");
+
+    const copyName = `${existing.name} (Copy)`;
+    if (await this.repo.findActiveByName(copyName)) {
+      throw new ConflictError("An active copy of this template already exists.");
+    }
 
     const copy = await this.repo.duplicate(id, actor.userId);
 

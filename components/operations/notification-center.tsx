@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, X } from "lucide-react";
 import { Badge, Button } from "@/components/ui";
 import { notificationTypeLabel } from "@/lib/operations/presentation";
 
@@ -24,6 +24,7 @@ function entityHref(n: Notification): string | null {
     lead: "/leads",
     client: "/clients",
     opportunity: "/opportunities",
+    proposal: "/proposals",
     task: "/tasks",
     meeting: "/meetings",
   };
@@ -32,40 +33,110 @@ function entityHref(n: Notification): string | null {
 }
 
 /**
- * Premium notification center — unread badge, grouped list, mark-as-read and
- * mark-all-as-read. Fetches real notification rows from the API.
+ * Premium notification center — unread badge, grouped list, mark-as-read,
+ * mark-all-as-read, and dismiss. Fetches real notification rows from the API
+ * with loading/error states and rollback on failure.
  */
 export function NotificationCenter({ initialCount }: { initialCount: number }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(initialCount);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyAll, setBusyAll] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/notifications?pageSize=50");
       const json = await res.json();
-      if (json.success) setNotifications(json.data);
-    } catch {
-      /* keep previous */
+      if (!res.ok || !json.success) {
+        throw new Error(json?.error?.message ?? "Could not load notifications.");
+      }
+      setNotifications(Array.isArray(json.data) ? json.data : []);
+      const countRes = await fetch("/api/notifications/unread-count");
+      const countJson = await countRes.json().catch(() => null);
+      if (countRes.ok && countJson?.success && typeof countJson.data?.count === "number") {
+        setUnread(countJson.data.count);
+      } else if (countRes.ok && countJson?.success && typeof countJson.data === "number") {
+        setUnread(countJson.data);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load notifications.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (open) load();
+    if (open) void load();
   }, [open, load]);
 
   async function markRead(id: string) {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    const previous = notifications;
+    const target = previous.find((n) => n.id === id);
+    if (!target || target.isRead || busyId) return;
+    setBusyId(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
     );
     setUnread((u) => Math.max(0, u - 1));
+    try {
+      const res = await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error?.message ?? "Could not mark as read.");
+      }
+    } catch {
+      setNotifications(previous);
+      setUnread((u) => u + 1);
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function markAllRead() {
-    await fetch("/api/notifications/read-all", { method: "POST" });
+    if (busyAll) return;
+    const previous = notifications;
+    const previousUnread = unread;
+    setBusyAll(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnread(0);
+    try {
+      const res = await fetch("/api/notifications/read-all", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error?.message ?? "Could not mark all as read.");
+      }
+    } catch {
+      setNotifications(previous);
+      setUnread(previousUnread);
+    } finally {
+      setBusyAll(false);
+    }
+  }
+
+  async function dismiss(id: string) {
+    if (busyId) return;
+    const previous = notifications;
+    const target = previous.find((n) => n.id === id);
+    setBusyId(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (target && !target.isRead) setUnread((u) => Math.max(0, u - 1));
+    try {
+      const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error?.message ?? "Could not dismiss.");
+      }
+    } catch {
+      setNotifications(previous);
+      if (target && !target.isRead) setUnread((u) => u + 1);
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -98,15 +169,33 @@ export function NotificationCenter({ initialCount }: { initialCount: number }) {
                 Notifications
               </span>
               {unread > 0 && (
-                <Button variant="ghost" size="sm" onClick={markAllRead}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={markAllRead}
+                  disabled={busyAll}
+                >
                   <CheckCheck className="h-4 w-4" />
-                  Mark all read
+                  {busyAll ? "Marking…" : "Mark all read"}
                 </Button>
               )}
             </div>
 
             <div className="max-h-96 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {loading ? (
+                <p role="status" className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  Loading notifications…
+                </p>
+              ) : error ? (
+                <div className="space-y-2 px-4 py-8 text-center">
+                  <p role="alert" className="text-sm text-danger">
+                    {error}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={load}>
+                    Retry
+                  </Button>
+                </div>
+              ) : notifications.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No notifications yet.
                 </p>
@@ -128,20 +217,32 @@ export function NotificationCenter({ initialCount }: { initialCount: number }) {
                               {n.message}
                             </p>
                           )}
-                          <p className="mt-1 text-[11px] text-faint">
+                          <p className="mt-1 text-[11px] text-faint" suppressHydrationWarning>
                             {new Date(n.createdAt).toLocaleString()}
                           </p>
                         </div>
-                        {!n.isRead && (
+                        <div className="flex flex-col gap-1 self-start">
+                          {!n.isRead && (
+                            <button
+                              type="button"
+                              aria-label="Mark as read"
+                              disabled={busyId === n.id}
+                              onClick={() => markRead(n.id)}
+                              className="text-faint hover:text-foreground disabled:opacity-50"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            aria-label="Mark as read"
-                            onClick={() => markRead(n.id)}
-                            className="self-start text-faint hover:text-foreground"
+                            aria-label="Dismiss notification"
+                            disabled={busyId === n.id}
+                            onClick={() => dismiss(n.id)}
+                            className="text-faint hover:text-foreground disabled:opacity-50"
                           >
-                            <Check className="h-4 w-4" />
+                            <X className="h-4 w-4" />
                           </button>
-                        )}
+                        </div>
                       </div>
                     );
                     return (

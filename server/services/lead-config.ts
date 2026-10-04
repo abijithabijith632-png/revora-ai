@@ -1,7 +1,7 @@
 import { BaseService } from "./base";
 import { LeadConfigRepository } from "@/server/repositories/lead-config";
 import { recordAudit } from "@/lib/api/audit";
-import { ConflictError, ValidationError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { LEAD_STATUSES, LEAD_SOURCES } from "@/lib/leads/schemas";
 
 /**
@@ -37,12 +37,18 @@ export class LeadConfigService extends BaseService {
     color?: string | null;
     orderIndex?: number;
     isActive?: boolean;
-  }) {
+  }, operation: "create" | "update" = "update") {
     const key = this.ensureValidKey(input.key);
     if ((LEAD_STATUSES as readonly string[]).includes(key)) {
       throw new ConflictError("System status keys cannot be overwritten.");
     }
     const existing = await this.repo.findStatusByKey(key);
+    if (operation === "create" && existing) throw new ConflictError("A status with this key already exists.");
+    if (operation === "update" && !existing) throw new NotFoundError("Custom status not found.");
+    if (input.isActive === false && existing?.isActive !== false) {
+      const count = await this.repo.countLeadsByStatus(key);
+      if (count > 0) throw new ConflictError(`Cannot deactivate "${key}" — ${count} lead(s) still reference it.`);
+    }
     const row = await this.repo.upsertStatus({
       ...input,
       key,
@@ -51,7 +57,7 @@ export class LeadConfigService extends BaseService {
     await recordAudit({
       organizationId: this.repo.orgId,
       userId: actor.userId,
-      action: "update",
+      action: operation === "create" ? "create" : "update",
       entityType: "lead_status_config",
       entityId: row.id,
       metadata: { key, isActive: input.isActive },
@@ -64,12 +70,18 @@ export class LeadConfigService extends BaseService {
     label?: string;
     orderIndex?: number;
     isActive?: boolean;
-  }) {
+  }, operation: "create" | "update" = "update") {
     const key = this.ensureValidKey(input.key);
     if ((LEAD_SOURCES as readonly string[]).includes(key)) {
       throw new ConflictError("System source keys cannot be overwritten.");
     }
     const existing = await this.repo.findSourceByKey(key);
+    if (operation === "create" && existing) throw new ConflictError("A source with this key already exists.");
+    if (operation === "update" && !existing) throw new NotFoundError("Custom source not found.");
+    if (input.isActive === false && existing?.isActive !== false) {
+      const count = await this.repo.countLeadsBySource(key);
+      if (count > 0) throw new ConflictError(`Cannot deactivate "${key}" — ${count} lead(s) still reference it.`);
+    }
     const row = await this.repo.upsertSource({
       ...input,
       key,
@@ -78,7 +90,7 @@ export class LeadConfigService extends BaseService {
     await recordAudit({
       organizationId: this.repo.orgId,
       userId: actor.userId,
-      action: "update",
+      action: operation === "create" ? "create" : "update",
       entityType: "lead_source_config",
       entityId: row.id,
       metadata: { key, isActive: input.isActive },
@@ -87,6 +99,8 @@ export class LeadConfigService extends BaseService {
   }
 
   async deactivateStatus(actor: { userId: string }, key: string) {
+    if ((LEAD_STATUSES as readonly string[]).includes(key)) throw new ConflictError("System statuses cannot be deactivated.");
+    if (!(await this.repo.findStatusByKey(key))) throw new NotFoundError("Custom status not found.");
     const count = await this.repo.countLeadsByStatus(key);
     if (count > 0) {
       throw new ConflictError(
@@ -106,6 +120,14 @@ export class LeadConfigService extends BaseService {
   }
 
   async deactivateSource(actor: { userId: string }, key: string) {
+    if ((LEAD_SOURCES as readonly string[]).includes(key)) throw new ConflictError("System sources cannot be deactivated.");
+    if (!(await this.repo.findSourceByKey(key))) throw new NotFoundError("Custom source not found.");
+    const count = await this.repo.countLeadsBySource(key);
+    if (count > 0) {
+      throw new ConflictError(
+        `Cannot deactivate "${key}" — ${count} lead(s) still reference it. Reassign them first.`,
+      );
+    }
     const row = await this.repo.deactivateSource(key);
     await recordAudit({
       organizationId: this.repo.orgId,

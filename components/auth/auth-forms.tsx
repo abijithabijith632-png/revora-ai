@@ -4,7 +4,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
-import { Button, Input, FormField } from "@/components/ui";
+import { Avatar, Button, Input, FormField } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 
 /**
@@ -410,42 +410,133 @@ export function ChangePasswordForm() {
 export function ProfileForm({
   initial,
 }: {
-  initial: { fullName: string; jobTitle: string | null };
+  initial: {
+    fullName: string;
+    jobTitle: string | null;
+    department: string | null;
+    avatarUrl: string | null;
+    phone: string | null;
+    location: string | null;
+  };
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [fullName, setFullName] = useState(initial.fullName);
   const [jobTitle, setJobTitle] = useState(initial.jobTitle ?? "");
+  const [department, setDepartment] = useState(initial.department ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(initial.avatarUrl ?? "");
+  const [phone, setPhone] = useState(initial.phone ?? "");
+  const [location, setLocation] = useState(initial.location ?? "");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const res = await fetch("/api/auth/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName, jobTitle: jobTitle || null }),
-    });
-    const result = await res.json();
-    setLoading(false);
-    if (result.success) {
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          jobTitle: jobTitle.trim() || null,
+          department: department.trim() || null,
+          avatarUrl: avatarUrl.trim() || null,
+          phone: phone.trim() || null,
+          location: location.trim() || null,
+        }),
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error?.message ?? "Unable to update profile.");
+      }
       toast({ variant: "success", title: "Profile updated." });
       router.refresh();
-    } else {
-      toast({
-        variant: "error",
-        title: result.error?.message ?? "Unable to update profile.",
-      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to update profile.";
+      setError(message);
+      toast({ variant: "error", title: message });
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
+      <div className="flex items-center gap-4">
+        <Avatar name={fullName} src={avatarUrl.trim() || undefined} size="lg" />
+        <div className="min-w-0 flex-1">
+          <FormField label="Photo URL">
+            <Input
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://…"
+              inputMode="url"
+            />
+          </FormField>
+          {avatarUrl.trim() && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-1"
+              onClick={() => setAvatarUrl("")}
+            >
+              Remove photo
+            </Button>
+          )}
+          <p className="mt-1 text-xs text-faint">
+            Paste an image URL to change your photo; remove to clear it.
+          </p>
+        </div>
+      </div>
       <FormField label="Full name" required>
-        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        <Input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          required
+          maxLength={255}
+        />
       </FormField>
-      <FormField label="Job title">
-        <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="Job title">
+          <Input
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            maxLength={128}
+          />
+        </FormField>
+        <FormField label="Phone">
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            maxLength={32}
+            inputMode="tel"
+            placeholder="+91 …"
+          />
+        </FormField>
+      </div>
+      <FormField label="Department">
+        <Input
+          value={department}
+          onChange={(e) => setDepartment(e.target.value)}
+          maxLength={128}
+        />
+      </FormField>
+      <FormField label="Location">
+        <Input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          maxLength={128}
+          placeholder="City, Country"
+        />
       </FormField>
       <SubmitButton loading={loading}>Save changes</SubmitButton>
     </form>

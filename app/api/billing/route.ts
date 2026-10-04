@@ -29,3 +29,14 @@ export async function POST(req: NextRequest) {
     return failure(error);
   }
 }
+
+export async function DELETE() {
+  try {
+    const session = await requireApiContext("billing.edit");
+    const service = new BillingService(session.organizationId);
+    const sub = await service.cancel({ userId: session.userId });
+    return success(sub, { message: "Subscription cancelled." });
+  } catch (error) {
+    return failure(error);
+  }
+}

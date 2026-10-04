@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const session = await requireSession();
     const input = await parseBody(req, updateProfileSchema);
-    const updated = await updateProfile(session.userId, input);
+    const updated = await updateProfile(session.userId, session.organizationId, input);
     return success(updated, { message: "Profile updated." });
   } catch (error) {
     return failure(error);

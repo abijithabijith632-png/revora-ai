@@ -32,6 +32,9 @@ export const users = pgTable(
     // Phase 16: department + designation (user administration).
     department: varchar("department", { length: 128 }),
     designation: varchar("designation", { length: 128 }),
+    // Profile contact fields.
+    phone: varchar("phone", { length: 32 }),
+    location: varchar("location", { length: 128 }),
     avatarUrl: text("avatar_url"),
     // Platform-level admin (Phase 16) — separate from org RBAC. NEVER granted
     // through org user-admin UI; only set via direct DB/platform seed.

@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+const localPort = process.env.PLAYWRIGHT_PORT ?? '3100';
+const baseURL = externalBaseURL ?? `http://127.0.0.1:${localPort}`;
 
 // Never run destructive/auth-mutating suites against production unless explicitly allowed.
 const isProdTarget = /revora-ai-omega\.vercel\.app|she-software-solutions-crm\.vercel\.app/.test(baseURL);
@@ -25,6 +27,15 @@ export default defineConfig({
     video: 'retain-on-failure',
     actionTimeout: 30000,
     navigationTimeout: 60000,
+  },
+  // Release validation runs `next build` before E2E. Start that exact build on
+  // a dedicated port so stale or unrelated localhost servers cannot serve the
+  // browser assets under test. An explicit external target still takes priority.
+  webServer: externalBaseURL ? undefined : {
+    command: `npm run start -- --hostname 127.0.0.1 --port ${localPort}`,
+    url: baseURL,
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
   testIgnore,
   projects: [

@@ -69,6 +69,7 @@ export class AnalyticsRepository extends TenantRepository {
   }
 
   async leadsOverTime(days = 30) {
+    const window = Math.min(Math.max(Math.floor(days), 1), 365);
     return this.db
       .select({
         date: sql<string>`to_char(${leads.createdAt}::date, 'YYYY-MM-DD')`,
@@ -78,11 +79,76 @@ export class AnalyticsRepository extends TenantRepository {
       .where(
         and(
           this.leadWhere(),
-          sql`${leads.createdAt} >= now() - (${days} || ' days')::interval`,
+          sql`${leads.createdAt} >= now() - (${window} || ' days')::interval`,
         ),
       )
       .groupBy(sql`to_char(${leads.createdAt}::date, 'YYYY-MM-DD')`)
       .orderBy(sql`1`);
+  }
+
+  async opportunitiesOverTime(days = 30) {
+    const window = Math.min(Math.max(Math.floor(days), 1), 365);
+    return this.db
+      .select({
+        date: sql<string>`to_char(${opportunities.createdAt}::date, 'YYYY-MM-DD')`,
+        count: sql<number>`count(*)::int`,
+        value: sql<number>`coalesce(sum(${opportunities.amount}), 0)::int`,
+      })
+      .from(opportunities)
+      .where(
+        and(
+          this.oppWhere(),
+          sql`${opportunities.createdAt} >= now() - (${window} || ' days')::interval`,
+        ),
+      )
+      .groupBy(sql`to_char(${opportunities.createdAt}::date, 'YYYY-MM-DD')`)
+      .orderBy(sql`1`);
+  }
+
+  /** Lead counts grouped by the tenant-configured status value. */
+  async leadsByStatus() {
+    return this.db
+      .select({
+        status: leads.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(leads)
+      .where(this.leadWhere())
+      .groupBy(leads.status)
+      .orderBy(sql`2 desc`);
+  }
+
+  /** AI lead-score histogram buckets (0-100 by tens) plus unscored count. */
+  async aiScoreDistribution() {
+    const [row] = await this.db
+      .select({
+        unscored: sql<number>`count(*) filter (where ${leads.aiScore} is null)::int`,
+        b0: sql<number>`count(*) filter (where ${leads.aiScore} is not null and ${leads.aiScore} < 10)::int`,
+        b10: sql<number>`count(*) filter (where ${leads.aiScore} >= 10 and ${leads.aiScore} < 20)::int`,
+        b20: sql<number>`count(*) filter (where ${leads.aiScore} >= 20 and ${leads.aiScore} < 30)::int`,
+        b30: sql<number>`count(*) filter (where ${leads.aiScore} >= 30 and ${leads.aiScore} < 40)::int`,
+        b40: sql<number>`count(*) filter (where ${leads.aiScore} >= 40 and ${leads.aiScore} < 50)::int`,
+        b50: sql<number>`count(*) filter (where ${leads.aiScore} >= 50 and ${leads.aiScore} < 60)::int`,
+        b60: sql<number>`count(*) filter (where ${leads.aiScore} >= 60 and ${leads.aiScore} < 70)::int`,
+        b70: sql<number>`count(*) filter (where ${leads.aiScore} >= 70 and ${leads.aiScore} < 80)::int`,
+        b80: sql<number>`count(*) filter (where ${leads.aiScore} >= 80 and ${leads.aiScore} < 90)::int`,
+        b90: sql<number>`count(*) filter (where ${leads.aiScore} >= 90)::int`,
+      })
+      .from(leads)
+      .where(this.leadWhere());
+    const buckets = [
+      { bucket: "0–9", count: row?.b0 ?? 0 },
+      { bucket: "10–19", count: row?.b10 ?? 0 },
+      { bucket: "20–29", count: row?.b20 ?? 0 },
+      { bucket: "30–39", count: row?.b30 ?? 0 },
+      { bucket: "40–49", count: row?.b40 ?? 0 },
+      { bucket: "50–59", count: row?.b50 ?? 0 },
+      { bucket: "60–69", count: row?.b60 ?? 0 },
+      { bucket: "70–79", count: row?.b70 ?? 0 },
+      { bucket: "80–89", count: row?.b80 ?? 0 },
+      { bucket: "90–100", count: row?.b90 ?? 0 },
+    ];
+    return { buckets, unscored: row?.unscored ?? 0 };
   }
 
   async funnel() {
@@ -158,7 +224,11 @@ export class AnalyticsRepository extends TenantRepository {
           eq(opportunities.isDeleted, false),
         ),
       )
-      .where(eq(pipelineStages.organizationId, this.organizationId))
+      .where(and(
+        eq(pipelineStages.organizationId, this.organizationId),
+        eq(pipelineStages.isActive, true),
+        eq(pipelineStages.isTerminal, false),
+      ))
       .groupBy(pipelineStages.key, pipelineStages.name, pipelineStages.orderIndex)
       .orderBy(pipelineStages.orderIndex);
   }

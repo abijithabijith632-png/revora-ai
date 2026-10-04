@@ -1,11 +1,14 @@
 import { sql } from "drizzle-orm";
 import { BaseService } from "./base";
 import { LeadRepository } from "@/server/repositories/leads";
+import { LeadConfigRepository } from "@/server/repositories/lead-config";
 import { db } from "@/db";
 import { leads } from "@/db/schema";
 import { recordAudit } from "@/lib/api/audit";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { NotificationService } from "./notifications";
 import { canTransition, QUALIFICATION_GATED_STATUSES } from "@/lib/leads/lifecycle";
+import { LEAD_SOURCES, LEAD_STATUSES } from "@/lib/leads/schemas";
 import type { Pagination, Sort } from "@/lib/api/query";
 import type {
   AssignLeadInput,
@@ -34,10 +37,28 @@ function toDate(value: string | undefined): Date | undefined {
 
 export class LeadService extends BaseService {
   private readonly repo: LeadRepository;
+  private readonly configRepo: LeadConfigRepository;
 
   constructor(organizationId: string) {
     super();
     this.repo = new LeadRepository(organizationId);
+    this.configRepo = new LeadConfigRepository(organizationId);
+  }
+
+  private async validateConfiguredValues(input: {
+    status?: string;
+    source?: string;
+  }, existing?: { status: string; source: string }) {
+    if (input.status && input.status !== existing?.status &&
+        !(await this.configRepo.findStatusByKey(input.status))?.isActive &&
+        !(LEAD_STATUSES as readonly string[]).includes(input.status)) {
+      throw new ConflictError("Select an active lead status.");
+    }
+    if (input.source && input.source !== existing?.source &&
+        !(await this.configRepo.findSourceByKey(input.source))?.isActive &&
+        !(LEAD_SOURCES as readonly string[]).includes(input.source)) {
+      throw new ConflictError("Select an active lead source.");
+    }
   }
 
   /** Format: LD-YYYY-XXXX with a per-tenant collision guard. */
@@ -103,6 +124,7 @@ export class LeadService extends BaseService {
   }
 
   async create(actor: { userId: string }, input: CreateLeadInput) {
+    await this.validateConfiguredValues(input);
     const firstName = input.firstName.trim();
     const lastName = input.lastName?.trim() || null;
     const fullName = buildFullName(firstName, lastName);
@@ -167,6 +189,7 @@ export class LeadService extends BaseService {
   async update(actor: { userId: string }, id: string, input: UpdateLeadInput) {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError("Lead not found.");
+    await this.validateConfiguredValues(input, existing);
 
     const firstName = input.firstName ?? existing.firstName ?? "";
     const lastName = input.lastName !== undefined ? input.lastName : existing.lastName;
@@ -199,6 +222,15 @@ export class LeadService extends BaseService {
     };
 
     const updated = await this.repo.update(id, patch);
+
+    if (input.status !== undefined && input.status !== existing.status) {
+      await this.repo.insertStatusHistory({
+        leadId: id,
+        fromStatus: existing.status,
+        toStatus: input.status,
+        changedBy: actor.userId,
+      });
+    }
 
     // Owner change → assignment history + audit.
     if (input.ownerId !== undefined && input.ownerId !== existing.ownerId) {
@@ -308,6 +340,21 @@ export class LeadService extends BaseService {
         strategy: input.strategy ?? "manual",
       },
     });
+
+    if (input.ownerId) {
+      try {
+        await new NotificationService(this.repo.orgId).notify({
+          userId: input.ownerId,
+          type: "lead_assigned",
+          title: existing.ownerId ? "Lead reassigned to you" : "New lead assigned",
+          message: `Lead "${existing.fullName ?? id}" was ${existing.ownerId ? "reassigned to you" : "assigned to you"}.`,
+          entityType: "lead",
+          entityId: id,
+        });
+      } catch {
+        // Notifications must never break assignment.
+      }
+    }
 
     return this.repo.findById(id);
   }

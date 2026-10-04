@@ -5,6 +5,7 @@ import { userHasPermission } from "@/lib/permissions/authorize";
 import { LeadService } from "@/server/services/leads";
 import { PageHeader, KpiCard, Badge } from "@/components/ui";
 import { LeadTable } from "@/components/leads";
+import { LeadConfigService } from "@/server/services/lead-config";
 
 export const metadata = { title: "Leads" };
 
@@ -23,11 +24,12 @@ export default async function LeadsPage({
 
   const sp = await searchParams;
   const service = new LeadService(session.organizationId);
+  const config = new LeadConfigService(session.organizationId);
 
   const page = Number(sp.page ?? "1") || 1;
   const pageSize = Math.min(Number(sp.pageSize ?? "20") || 20, 100);
 
-  const [{ rows, total }, summary] = await Promise.all([
+  const [{ rows, total }, summary, statuses, sources] = await Promise.all([
     service.list({
       pagination: { page, pageSize, offset: (page - 1) * pageSize },
       sort: {
@@ -43,6 +45,8 @@ export default async function LeadsPage({
       },
     }),
     service.summary(),
+    config.listStatuses(),
+    config.listSources(),
   ]);
 
   const totalPages = Math.ceil(total / pageSize);
@@ -101,6 +105,8 @@ export default async function LeadsPage({
       <LeadTable
         initialRows={serializedRows}
         initialMeta={{ page, pageSize, total, totalPages }}
+        customStatuses={statuses.filter((row) => row.isActive).map(({ key, label }) => ({ key, label }))}
+        customSources={sources.filter((row) => row.isActive).map(({ key, label }) => ({ key, label }))}
       />
     </div>
   );

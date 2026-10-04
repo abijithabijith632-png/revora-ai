@@ -4,6 +4,7 @@ import { userHasPermission } from "@/lib/permissions/authorize";
 import { LeadService } from "@/server/services/leads";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, PageHeader } from "@/components/ui";
 import { LeadForm } from "@/components/leads";
+import { LeadConfigService } from "@/server/services/lead-config";
 
 export const metadata = { title: "Edit Lead" };
 
@@ -22,7 +23,12 @@ export default async function EditLeadPage({
 
   const { id } = await params;
   const service = new LeadService(session.organizationId);
-  const lead = await service.getById(id).catch(() => null);
+  const config = new LeadConfigService(session.organizationId);
+  const [lead, statuses, sources] = await Promise.all([
+    service.getById(id).catch(() => null),
+    config.listStatuses(),
+    config.listSources(),
+  ]);
   if (!lead) notFound();
 
   return (
@@ -42,6 +48,8 @@ export default async function EditLeadPage({
           <LeadForm
             mode="edit"
             leadId={lead.id}
+            customStatuses={statuses.filter((row) => row.isActive).map(({ key, label }) => ({ key, label }))}
+            customSources={sources.filter((row) => row.isActive).map(({ key, label }) => ({ key, label }))}
             initial={{
               firstName: lead.firstName ?? lead.fullName,
               lastName: lead.lastName ?? "",

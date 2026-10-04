@@ -14,7 +14,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx db/seed/index.ts",
-    "test:unit": "node --import tsx --test tests/phase3-intelligence.test.ts tests/phase4-agent-contracts.test.ts tests/release-integration.test.ts tests/cross-tenant-guard.test.ts tests/regression.test.ts",
+    "test:unit": "node --import tsx --test tests/phase3-intelligence.test.ts tests/phase4-agent-contracts.test.ts tests/release-integration.test.ts tests/cross-tenant-guard.test.ts tests/regression.test.ts tests/opportunity-stage.test.ts tests/crm-fixes.test.ts",
     "test:e2e-responsive": "playwright test e2e/responsive.spec.ts",
     "verify:isolated-db": "tsx scripts/verify-isolated-db.ts"
   },

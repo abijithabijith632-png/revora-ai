@@ -15,9 +15,11 @@ for (const vp of viewports) {
   test.describe(`responsive ${vp.name} ${vp.width}x${vp.height}`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test('homepage renders without horizontal overflow', async ({ page }) => {
-      await page.goto('/');
-      await expect(page.locator('body')).toBeVisible();
+    test('root landing renders without horizontal overflow', async ({ page }) => {
+      // The root route enters the protected dashboard and requires a session.
+      // Responsive smoke coverage targets the public login page directly.
+      await page.goto('/login');
+      await expect(page.getByRole('heading', { name: /sign in to she software solutions/i })).toBeVisible();
       const overflow = await page.evaluate(() => {
         const doc = document.documentElement;
         return doc.scrollWidth - doc.clientWidth;
@@ -28,8 +30,8 @@ for (const vp of viewports) {
     test('login page form is usable', async ({ page }) => {
       await page.goto('/login');
       await expect(page.locator('body')).toBeVisible();
-      await expect(page.getByText(/sign in/i).first()).toBeVisible({ timeout: 15000 });
-      const submit = page.locator('button[type="submit"], button:has-text("Sign in")');
+      await expect(page.getByRole('heading', { name: /sign in to she software solutions/i })).toBeVisible({ timeout: 15000 });
+      const submit = page.getByRole('button', { name: /^sign in$/i });
       await expect(submit.first()).toBeVisible({ timeout: 15000 });
     });
 

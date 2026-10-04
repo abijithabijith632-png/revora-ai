@@ -54,6 +54,8 @@ type SortColumn =
 interface LeadTableProps {
   initialRows: LeadListItem[];
   initialMeta: LeadListMeta;
+  customStatuses?: { key: string; label: string }[];
+  customSources?: { key: string; label: string }[];
 }
 
 const SORTABLE: { key: SortColumn; label: string }[] = [
@@ -72,7 +74,7 @@ function AiBadge({ aiScore }: { aiScore: number | null }) {
   return <Badge variant="ai">{aiScore}</Badge>;
 }
 
-export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
+export function LeadTable({ initialRows, initialMeta, customStatuses = [], customSources = [] }: LeadTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -202,6 +204,9 @@ export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
                 {LEAD_STATUS_LABELS[s]}
               </option>
             ))}
+            {customStatuses.filter((s) => !(LEAD_STATUSES as readonly string[]).includes(s.key)).map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
           </Select>
           <Select
             value={source}
@@ -217,6 +222,9 @@ export function LeadTable({ initialRows, initialMeta }: LeadTableProps) {
               <option key={s} value={s}>
                 {LEAD_SOURCE_LABELS[s]}
               </option>
+            ))}
+            {customSources.filter((s) => !(LEAD_SOURCES as readonly string[]).includes(s.key)).map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
             ))}
           </Select>
         </div>

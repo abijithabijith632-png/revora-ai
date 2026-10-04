@@ -6,16 +6,27 @@ import { Button, FormField, Input, Select, Textarea } from "@/components/ui";
 import { PROPOSAL_STATUSES } from "@/lib/commercial/schemas";
 import { proposalStatusLabel } from "@/lib/commercial/presentation";
 
+interface ProposalOption {
+  id: string;
+  name: string;
+}
+
 export function ProposalForm({
   opportunityId,
   clientId,
+  opportunities = [],
+  clients = [],
 }: {
   opportunityId?: string;
   clientId?: string;
+  opportunities?: ProposalOption[];
+  clients?: ProposalOption[];
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedOpportunity, setSelectedOpportunity] = useState(opportunityId ?? "");
+  const [selectedClient, setSelectedClient] = useState(clientId ?? "");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,10 +34,18 @@ export function ProposalForm({
     setError(null);
 
     const form = new FormData(e.currentTarget);
+    const resolvedOpportunity = opportunityId ?? selectedOpportunity;
+    if (!resolvedOpportunity) {
+      setError("Select an opportunity for this proposal.");
+      setSubmitting(false);
+      return;
+    }
     const payload = {
       title: form.get("title") as string,
-      ...(opportunityId ? { opportunityId } : {}),
-      ...(clientId ? { clientId } : {}),
+      opportunityId: resolvedOpportunity,
+      ...(clientId ?? selectedClient
+        ? { clientId: (clientId ?? selectedClient) as string }
+        : {}),
       amount: form.get("amount") ? Number(form.get("amount")) : undefined,
       status: form.get("status") as string,
       expiryDate: (form.get("expiryDate") as string) || undefined,
@@ -57,6 +76,41 @@ export function ProposalForm({
       <FormField label="Title" htmlFor="proposal-title" required>
         <Input id="proposal-title" name="title" placeholder="Proposal title" required />
       </FormField>
+
+      {!opportunityId && (
+        <FormField label="Opportunity" htmlFor="proposal-opportunity" required>
+          <Select
+            id="proposal-opportunity"
+            value={selectedOpportunity}
+            onChange={(e) => setSelectedOpportunity(e.target.value)}
+            required
+          >
+            <option value="">Select an opportunity…</option>
+            {opportunities.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
+
+      {!clientId && clients.length > 0 && (
+        <FormField label="Client (optional)" htmlFor="proposal-client">
+          <Select
+            id="proposal-client"
+            value={selectedClient}
+            onChange={(e) => setSelectedClient(e.target.value)}
+          >
+            <option value="">No client</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FormField label="Amount" htmlFor="proposal-amount">

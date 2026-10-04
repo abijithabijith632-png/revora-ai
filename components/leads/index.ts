@@ -9,3 +9,4 @@ export { AiScoreCard } from "./ai-score-card";
 export { LeadAssignment } from "./lead-assignment";
 export { LeadDuplicates } from "./lead-duplicates";
 export { ConvertLeadButton } from "./convert-lead-button";
+export { NewAssignmentButton } from "./new-assignment-button";

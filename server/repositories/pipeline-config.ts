@@ -32,6 +32,24 @@ export class PipelineConfigRepository extends TenantRepository {
     return row ?? null;
   }
 
+  async findByKey(key: string) {
+    const [row] = await this.db.select().from(pipelineStages).where(
+      and(eq(pipelineStages.key, key), eq(pipelineStages.organizationId, this.organizationId)),
+    ).limit(1);
+    return row ?? null;
+  }
+
+  async findByName(name: string, exceptId?: string) {
+    const [row] = await this.db.select().from(pipelineStages).where(
+      and(
+        eq(pipelineStages.organizationId, this.organizationId),
+        sql`lower(${pipelineStages.name}) = lower(${name})`,
+        ...(exceptId ? [sql`${pipelineStages.id} <> ${exceptId}`] : []),
+      ),
+    ).limit(1);
+    return row ?? null;
+  }
+
   async create(input: {
     name: string;
     key: string;

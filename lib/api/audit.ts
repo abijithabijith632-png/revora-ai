@@ -17,6 +17,21 @@ export type AuditAction =
   | "approve"
   | "status_change";
 
+const SENSITIVE_AUDIT_KEY = /(password|passphrase|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+
+/** Redact sensitive values at both write and audit-log read boundaries. */
+export function sanitizeAuditValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeAuditValue);
+  if (value && typeof value === "object") {
+    if (value instanceof Date) return value.toISOString();
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      SENSITIVE_AUDIT_KEY.test(key) ? "[REDACTED]" : sanitizeAuditValue(item),
+    ]));
+  }
+  return value;
+}
+
 export async function recordAudit(input: {
   organizationId: string;
   userId?: string | null;
@@ -31,6 +46,6 @@ export async function recordAudit(input: {
     action: input.action,
     entityType: input.entityType,
     entityId: input.entityId ?? null,
-    metadata: input.metadata,
+    metadata: input.metadata ? sanitizeAuditValue(input.metadata) as Record<string, unknown> : undefined,
   });
 }

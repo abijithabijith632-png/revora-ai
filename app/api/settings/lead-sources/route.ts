@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const session = await requireApiContext("lead_sources.create");
     const input = parseBody(req, upsertSchema);
     const service = new LeadConfigService(session.organizationId);
-    const row = await service.upsertSource({ userId: session.userId }, await input);
+    const row = await service.upsertSource({ userId: session.userId }, await input, "create");
     return success(row, { message: "Lead source saved.", status: 201 });
   } catch (error) {
     return failure(error);

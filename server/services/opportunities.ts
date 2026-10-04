@@ -1,13 +1,14 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { BaseService } from "./base";
 import { OpportunityRepository } from "@/server/repositories/opportunities";
 import { ClientRepository } from "@/server/repositories/clients";
 import { db } from "@/db";
-import { opportunities, users } from "@/db/schema";
+import { opportunities, opportunityStageHistory, users } from "@/db/schema";
 import { recordAudit } from "@/lib/api/audit";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { canTransition, stageProbability, type PipelineStageKey } from "@/lib/opportunities/pipeline";
 import { PipelineConfigService } from "./pipeline-config";
+import { NotificationService } from "./notifications";
 import type { Pagination, Sort } from "@/lib/api/query";
 import type {
   CreateOpportunityInput,
@@ -15,6 +16,7 @@ import type {
   OpportunityStageInput,
   UpdateOpportunityInput,
 } from "@/lib/opportunities/schemas";
+import { STAGE_KEYS } from "@/lib/opportunities/schemas";
 
 const DEFAULT_SORT: Sort<"createdAt"> = { column: "createdAt", order: "desc" };
 
@@ -91,24 +93,25 @@ export class OpportunityService extends BaseService {
     if (user.status !== "active") throw new ValidationError("Owner must be an active user.");
   }
 
-  private async resolveStageId(stageKey: string): Promise<string> {
+  private async resolveStage(stageKey: string) {
     // Organizations created before stage provisioning have zero rows while
     // the UI offers canonical stages — seed defaults on demand so valid
     // stage keys always resolve. Never touches configured orgs.
     await new PipelineConfigService(this.repo.orgId).ensureDefaultStages();
-    const stageId = await this.repo.findStageIdByKey(stageKey);
-    if (!stageId) throw new ValidationError("Invalid pipeline stage.");
-    return stageId;
+    const stage = await this.repo.findActiveStageByKey(stageKey);
+    if (!stage) throw new ValidationError("Invalid or inactive pipeline stage.");
+    return stage;
   }
 
   async create(actor: { userId: string }, input: CreateOpportunityInput) {
     await this.validateClient(input.clientId);
     await this.validateOwner(input.ownerId);
 
-    const stageId = await this.resolveStageId(input.stageKey);
+    const stage = await this.resolveStage(input.stageKey);
+    const stageId = stage.id;
 
     const opportunityNumber = await this.nextOpportunityNumber();
-    const probability = input.probability ?? stageProbability(input.stageKey);
+    const probability = input.probability ?? stage.probability ?? stageProbability(input.stageKey);
 
     const opp = await this.repo.create({
       opportunityNumber,
@@ -161,11 +164,19 @@ export class OpportunityService extends BaseService {
 
     let stageId: string | null = existing.stageId;
     if (input.stageKey && input.stageKey !== existing.stageKey) {
-      const nextStageId = await this.resolveStageId(input.stageKey);
-      if (!canTransition(existing.stageKey as PipelineStageKey, input.stageKey)) {
+      const nextStage = await this.resolveStage(input.stageKey);
+      const currentStage = existing.stageKey
+        ? await this.repo.findActiveStageByKey(existing.stageKey)
+        : null;
+      const currentIsCanonical = STAGE_KEYS.includes(existing.stageKey as (typeof STAGE_KEYS)[number]);
+      const nextIsCanonical = STAGE_KEYS.includes(input.stageKey as (typeof STAGE_KEYS)[number]);
+      const allowed = currentIsCanonical && nextIsCanonical
+        ? canTransition(existing.stageKey as PipelineStageKey, input.stageKey as PipelineStageKey)
+        : Boolean(currentStage && !currentStage.isTerminal && nextStage.orderIndex > currentStage.orderIndex);
+      if (!allowed) {
         throw new ForbiddenError("That pipeline transition is not allowed.");
       }
-      stageId = nextStageId;
+      stageId = nextStage.id;
     }
 
     const patch = {
@@ -202,6 +213,27 @@ export class OpportunityService extends BaseService {
       entityId: id,
     });
 
+    if (input.stageKey && input.stageKey !== existing.stageKey) {
+      const notifyOwner =
+        (input.ownerId !== undefined ? input.ownerId : existing.ownerId) as
+          | string
+          | null;
+      if (notifyOwner) {
+        try {
+          await new NotificationService(this.repo.orgId).notify({
+            userId: notifyOwner,
+            type: "stage_changed",
+            title: `Opportunity moved to ${input.stageKey}`,
+            message: `"${existing.name}" moved from ${existing.stageKey} to ${input.stageKey}.`,
+            entityType: "opportunity",
+            entityId: id,
+          });
+        } catch {
+          // Notifications must never break opportunity updates.
+        }
+      }
+    }
+
     return updated;
   }
 
@@ -210,9 +242,23 @@ export class OpportunityService extends BaseService {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError("Opportunity not found.");
 
-    if (input.stageKey === existing.stageKey) return existing;
+    // Normalize a missing stage (deleted stage row) to the canonical start,
+    // matching the list query's coalesce(key, 'new') so orphaned rows can
+    // still move forward instead of failing every transition with 403.
+    const fromKey = (existing.stageKey ?? "new") as PipelineStageKey;
 
-    if (!canTransition(existing.stageKey as PipelineStageKey, input.stageKey)) {
+    if (input.stageKey === fromKey && existing.stageKey !== null) return existing;
+
+    const resolvedStage = await this.resolveStage(input.stageKey);
+    const currentStage = existing.stageKey
+      ? await this.repo.findActiveStageByKey(existing.stageKey)
+      : null;
+    const fromIsCanonical = STAGE_KEYS.includes(fromKey as (typeof STAGE_KEYS)[number]);
+    const toIsCanonical = STAGE_KEYS.includes(input.stageKey as (typeof STAGE_KEYS)[number]);
+    const allowed = fromIsCanonical && toIsCanonical
+      ? canTransition(fromKey, input.stageKey as PipelineStageKey)
+      : Boolean(currentStage && !currentStage.isTerminal && resolvedStage.orderIndex > currentStage.orderIndex);
+    if (!allowed) {
       throw new ForbiddenError("That pipeline transition is not allowed.");
     }
 
@@ -220,13 +266,22 @@ export class OpportunityService extends BaseService {
       throw new ValidationError("A loss reason is required when moving to Lost.");
     }
 
-    const newStageId = await this.resolveStageId(input.stageKey);
+    const newStageId = resolvedStage.id;
 
-    const newProbability =
-      input.probability ?? stageProbability(input.stageKey);
+    // Verify the resolved stage still belongs to this organization. The
+    // lookup is already org-scoped, but re-check explicitly so a cross-tenant
+    // id can never be persisted even if the lookup is ever relaxed.
+    const targetStage = await this.repo.findStageById(newStageId);
+    if (!targetStage) throw new ValidationError("Invalid pipeline stage.");
 
-    await db.transaction(async (tx) => {
-      await tx
+    const newProbability = input.probability ?? resolvedStage.probability ?? stageProbability(input.stageKey as PipelineStageKey);
+
+    // Atomic, tenant-scoped transition: both the opportunity update and the
+    // history insert run on the same transaction handle. Using the global
+    // pool inside the callback would need a second connection (deadlock with
+    // max:1 on Vercel) and would leave the two writes non-atomic.
+    const updatedRows = await db.transaction(async (tx) => {
+      const [updated] = await tx
         .update(opportunities)
         .set({
           stageId: newStageId,
@@ -239,9 +294,19 @@ export class OpportunityService extends BaseService {
             : {}),
           updatedAt: new Date(),
         })
-        .where(eq(opportunities.id, id));
+        .where(
+          and(
+            eq(opportunities.id, id),
+            eq(opportunities.organizationId, this.repo.orgId),
+            eq(opportunities.isDeleted, false),
+          ),
+        )
+        .returning({ id: opportunities.id });
 
-      await this.repo.insertStageHistory({
+      if (!updated) throw new NotFoundError("Opportunity not found.");
+
+      await tx.insert(opportunityStageHistory).values({
+        organizationId: this.repo.orgId,
         opportunityId: id,
         previousStageId: existing.stageId,
         newStageId,
@@ -250,7 +315,10 @@ export class OpportunityService extends BaseService {
         changedBy: actor.userId,
         reason: input.reason ?? input.notes ?? null,
       });
+
+      return updated;
     });
+    void updatedRows;
 
     await recordAudit({
       organizationId: this.repo.orgId,
@@ -265,6 +333,21 @@ export class OpportunityService extends BaseService {
         newProbability,
       },
     });
+
+    if (existing.ownerId) {
+      try {
+        await new NotificationService(this.repo.orgId).notify({
+          userId: existing.ownerId,
+          type: "stage_changed",
+          title: `Opportunity moved to ${input.stageKey}`,
+          message: `"${existing.name}" moved from ${fromKey} to ${input.stageKey}.`,
+          entityType: "opportunity",
+          entityId: id,
+        });
+      } catch {
+        // Notifications must never break stage changes.
+      }
+    }
 
     return this.repo.findById(id);
   }

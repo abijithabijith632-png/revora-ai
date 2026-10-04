@@ -1,5 +1,3 @@
-import { serverEnv } from "@/config/env";
-
 /**
  * Payment provider abstraction (Phase 16).
  *
@@ -23,9 +21,11 @@ export interface PaymentProvider {
   charge(input: ChargeInput): Promise<{ reference: string } | null>;
 }
 
-class NoopPaymentProvider implements PaymentProvider {
+class UnavailablePaymentProvider implements PaymentProvider {
   isConfigured(): boolean {
-    return Boolean(serverEnv.paymentProviderApiKey);
+    // No real gateway is implemented here; an environment key alone is not
+    // evidence that this application can authorize or capture a charge.
+    return false;
   }
 
   async charge(): Promise<{ reference: string } | null> {
@@ -34,4 +34,4 @@ class NoopPaymentProvider implements PaymentProvider {
   }
 }
 
-export const paymentProvider: PaymentProvider = new NoopPaymentProvider();
+export const paymentProvider: PaymentProvider = new UnavailablePaymentProvider();

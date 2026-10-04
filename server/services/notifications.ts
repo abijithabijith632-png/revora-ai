@@ -70,6 +70,12 @@ export class NotificationService extends BaseService {
     return { marked: rows.length };
   }
 
+  async remove(userId: string, id: string) {
+    const row = await this.repo.remove(userId, id);
+    if (!row) throw new NotFoundError("Notification not found.");
+    return row;
+  }
+
   async getPreferences(userId: string) {
     return this.repo.getPreferences(userId);
   }

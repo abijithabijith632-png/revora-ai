@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 import type { AuthSession } from "@/lib/auth/session";
 import { db } from "@/db";
 import {
@@ -98,7 +98,7 @@ export async function assignRole(
   const target = await db.query.users.findFirst({
     where: and(eq(users.id, targetUserId), eq(users.organizationId, organizationId)),
   });
-  if (!target) throw new NotFoundError("User not found.");
+  if (!target || target.isDeleted) throw new NotFoundError("User not found.");
 
   // Target role must belong to the same organization.
   const targetRole = await db.query.roles.findFirst({
@@ -135,10 +135,38 @@ export async function assignRole(
   await db.transaction(async (tx) => {
     // Remove existing roles for the user in this org.
     const existing = await tx
-      .select({ roleId: userRoles.roleId })
+      .select({ roleId: userRoles.roleId, roleName: roles.name })
       .from(userRoles)
       .innerJoin(roles, eq(roles.id, userRoles.roleId))
       .where(and(eq(userRoles.userId, targetUserId), eq(roles.organizationId, organizationId)));
+
+    const currentlyAdmin = existing.some((r) => r.roleName === "Admin" || r.roleName === "Super Admin");
+    const remainsAdmin = targetRole.name === "Admin" || targetRole.name === "Super Admin";
+    if (currentlyAdmin && !remainsAdmin && target.status === "active") {
+      // Lock the active administrator rows while checking and replacing this
+      // user's grants, so concurrent role changes cannot remove the final admin.
+      const adminRoleUsers = tx
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(roles.id, userRoles.roleId))
+        .where(and(
+          eq(roles.organizationId, organizationId),
+          or(eq(roles.name, "Admin"), eq(roles.name, "Super Admin"))!,
+        ));
+      const activeAdmins = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.organizationId, organizationId),
+          eq(users.status, "active"),
+          eq(users.isDeleted, false),
+          inArray(users.id, adminRoleUsers),
+        ))
+        .for("update");
+      if (activeAdmins.length <= 1) {
+        throw new ForbiddenError("Cannot remove the last active administrator role.");
+      }
+    }
 
     for (const e of existing) {
       await tx.delete(userRoles).where(and(eq(userRoles.userId, targetUserId), eq(userRoles.roleId, e.roleId)));

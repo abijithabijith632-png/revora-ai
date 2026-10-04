@@ -10,6 +10,7 @@ import { parseAndValidate } from "@/lib/validation";
 import { z } from "zod";
 import { recordAudit } from "@/lib/api/audit";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { NotificationService } from "./notifications";
 
 /**
  * Lead assignment business logic — 4 deterministic strategies + telemetry.
@@ -275,6 +276,21 @@ export class AssignmentService extends BaseService {
         strategy: input.strategy,
       },
     });
+
+    // Event-driven notification to the new owner (new assignment vs reassign).
+    try {
+      const lead = await this.leadRepo.findById(leadId);
+      await new NotificationService(this.repo.orgId).notify({
+        userId: input.assignedTo,
+        type: "lead_assigned",
+        title: input.previousOwnerId ? "Lead reassigned to you" : "New lead assigned",
+        message: `Lead "${lead?.fullName ?? leadId}" was ${input.previousOwnerId ? "reassigned to you" : "assigned to you"}.`,
+        entityType: "lead",
+        entityId: leadId,
+      });
+    } catch {
+      // Notifications must never break assignment.
+    }
 
     return this.leadRepo.findById(leadId);
   }

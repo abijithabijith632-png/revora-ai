@@ -18,10 +18,16 @@ export function MeetingForm({ leadId }: { leadId?: string }) {
 
     const form = new FormData(e.currentTarget);
     const duration = form.get("durationMinutes") as string;
+    const rawWhen = ((form.get("scheduledAt") as string) ?? "").trim();
+    if (!rawWhen || Number.isNaN(Date.parse(rawWhen))) {
+      setError("Enter a valid date and time.");
+      setSubmitting(false);
+      return;
+    }
     const payload = {
       title: form.get("title") as string,
       description: form.get("description") as string,
-      scheduledAt: new Date(form.get("scheduledAt") as string).toISOString(),
+      scheduledAt: new Date(rawWhen).toISOString(),
       ...(duration ? { durationMinutes: Number(duration) } : {}),
       virtualLink: form.get("virtualLink") as string,
       agenda: form.get("agenda") as string,

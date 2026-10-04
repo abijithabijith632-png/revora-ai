@@ -1,9 +1,14 @@
 import { BaseService } from "./base";
 import { ProposalRepository } from "@/server/repositories/proposals";
+import { OpportunityRepository } from "@/server/repositories/opportunities";
+import { ClientRepository } from "@/server/repositories/clients";
 import { ActivityService } from "./activities";
 import { NotificationService } from "./notifications";
 import { recordAudit } from "@/lib/api/audit";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { sql } from "drizzle-orm";
 import type { Pagination, Sort } from "@/lib/api/query";
 import type {
   CreateProposalInput,
@@ -31,10 +36,38 @@ const ALLOWED: Record<string, string[]> = {
 
 export class ProposalService extends BaseService {
   private readonly repo: ProposalRepository;
+  private readonly opportunityRepo: OpportunityRepository;
+  private readonly clientRepo: ClientRepository;
 
   constructor(organizationId: string) {
     super();
     this.repo = new ProposalRepository(organizationId);
+    this.opportunityRepo = new OpportunityRepository(organizationId);
+    this.clientRepo = new ClientRepository(organizationId);
+  }
+
+  private async validateOpportunity(opportunityId: string) {
+    const found = await this.opportunityRepo.findIdByOrg(opportunityId);
+    if (!found) throw new ValidationError("Opportunity must belong to this organization.");
+  }
+
+  private async validateClient(clientId?: string | null) {
+    if (!clientId) return;
+    const exists = await this.clientRepo.findClientIdByOrg(clientId);
+    if (!exists) throw new ValidationError("Client must belong to this organization.");
+  }
+
+  private async validateOwner(ownerId?: string | null) {
+    if (!ownerId) return;
+    const [user] = await db
+      .select({ id: users.id, status: users.status })
+      .from(users)
+      .where(
+        sql`${users.id} = ${ownerId} AND ${users.organizationId} = ${this.repo.orgId} AND ${users.isDeleted} = false`,
+      )
+      .limit(1);
+    if (!user) throw new ValidationError("Owner must belong to this organization.");
+    if (user.status !== "active") throw new ValidationError("Owner must be an active user.");
   }
 
   async list(input: {
@@ -61,13 +94,20 @@ export class ProposalService extends BaseService {
   }
 
   async create(actor: { userId: string }, input: CreateProposalInput) {
+    await this.validateOpportunity(input.opportunityId);
+    await this.validateClient(input.clientId);
+    await this.validateOwner(input.ownerId);
+
+    // Default matches the API schema (status defaults to "draft" at the
+    // route layer); direct service callers must not write a null status.
+    const status = input.status ?? "draft";
     const proposal = await this.repo.create({
       opportunityId: input.opportunityId,
       clientId: input.clientId ?? null,
       ownerId: input.ownerId ?? null,
       title: input.title,
       amount: input.amount ?? null,
-      status: input.status,
+      status,
       expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
       notes: input.notes ?? null,
       createdBy: actor.userId,
@@ -76,7 +116,7 @@ export class ProposalService extends BaseService {
     await this.repo.insertEvent({
       proposalId: proposal.id,
       fromStatus: null,
-      toStatus: input.status,
+      toStatus: status,
       changedBy: actor.userId,
     });
 
@@ -86,6 +126,21 @@ export class ProposalService extends BaseService {
       opportunityId: input.opportunityId,
       performedBy: actor.userId,
     });
+
+    if (proposal.ownerId) {
+      try {
+        await new NotificationService(this.repo.orgId).notify({
+          userId: proposal.ownerId,
+          type: "important_deal_update",
+          title: "Proposal created",
+          message: `Proposal "${proposal.title}" was created.`,
+          entityType: "proposal",
+          entityId: proposal.id,
+        });
+      } catch {
+        // Notifications must never break proposal creation.
+      }
+    }
 
     await recordAudit({
       organizationId: this.repo.orgId,
@@ -101,6 +156,16 @@ export class ProposalService extends BaseService {
   async update(actor: { userId: string }, id: string, input: UpdateProposalInput) {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError("Proposal not found.");
+
+    if (input.opportunityId && input.opportunityId !== existing.opportunityId) {
+      await this.validateOpportunity(input.opportunityId);
+    }
+    if (input.clientId !== undefined) {
+      await this.validateClient(input.clientId);
+    }
+    if (input.ownerId !== undefined) {
+      await this.validateOwner(input.ownerId);
+    }
 
     const patch: Parameters<typeof this.repo.update>[1] = {
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
@@ -122,6 +187,22 @@ export class ProposalService extends BaseService {
     };
 
     const updated = await this.repo.update(id, patch);
+
+    const notifyOwner = updated?.ownerId ?? existing.ownerId;
+    if (notifyOwner) {
+      try {
+        await new NotificationService(this.repo.orgId).notify({
+          userId: notifyOwner,
+          type: "important_deal_update",
+          title: "Proposal updated",
+          message: `Proposal "${existing.title}" was updated.`,
+          entityType: "proposal",
+          entityId: id,
+        });
+      } catch {
+        // Notifications must never break proposal updates.
+      }
+    }
 
     await recordAudit({
       organizationId: this.repo.orgId,

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const permission = input.entityType === "lead" ? "leads.view" : input.entityType === "contact" ? "contacts.view" : "opportunities.view";
     const session = await requireApiContext(permission);
     checkRateLimit(rateLimitKey(session.userId, req.headers.get("x-forwarded-for") ?? ""), 8, 60_000);
-    const draft = await new EmailDraftService(session.organizationId).generate(input);
+    const draft = await new EmailDraftService(session.organizationId).generate(input, { userId: session.userId, roleNames: session.roleNames });
     return success(draft, { message: "Email draft generated. Review and edit before using." });
   } catch (error) { return failure(error, { log: false }); }
 }

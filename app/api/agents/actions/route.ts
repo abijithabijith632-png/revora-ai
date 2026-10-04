@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (!type || !entityId) throw new ValidationError("This record has no supported email-draft target.");
     const emailPermission: Permission = type === "lead" ? "leads.view" : type === "opportunity" ? "opportunities.view" : "contacts.view";
     if (!(await userHasPermission(session.userId, session.organizationId, emailPermission))) throw new ForbiddenError("You do not have permission to draft email for this record.");
-    const draft = await new EmailDraftService(session.organizationId).generate({ entityType: type, entityId, purpose: input.purpose });
+    const draft = await new EmailDraftService(session.organizationId).generate({ entityType: type, entityId, purpose: input.purpose }, { userId: session.userId, roleNames: session.roleNames });
     await recordAudit({ organizationId: session.organizationId, userId: session.userId, action: "approve", entityType: "ai_agent_action", entityId: entityId, metadata: { agentId: input.agentId, actionType: "draft_email", targetId: input.targetId ?? null, confirmationStatus: "confirmed", sent: false } });
     return success({ actionType: "draft_email", result: "Editable email draft generated; no email was sent.", draft });
   } catch (error) { return failure(error, { log: false }); }

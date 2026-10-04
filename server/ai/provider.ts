@@ -1,5 +1,5 @@
 import { serverEnv } from "@/config/env";
-import { ValidationError } from "@/lib/errors";
+import { AppError, ConfigurationError, ValidationError } from "@/lib/errors";
 
 /**
  * Server-only OpenAI-compatible AI provider client (Groq by default).
@@ -19,10 +19,22 @@ export interface StructuredAiRequest {
   jsonMode?: boolean;
 }
 
-export class AiProviderUnavailableError extends Error {
+export class AiProviderUnavailableError extends ConfigurationError {
   constructor() {
-    super("AI provider not configured.");
+    super("AI features are unavailable because the AI provider is not configured.");
     this.name = "AiProviderUnavailableError";
+  }
+}
+
+/**
+ * AI provider failure with an actionable message (HTTP error, timeout, or
+ * unparsable response). Surfaced as INTERNAL_ERROR so callers return a
+ * meaningful 500 instead of "An unexpected error occurred."
+ */
+export class AiProviderError extends AppError {
+  constructor(message: string) {
+    super("INTERNAL_ERROR", message);
+    this.name = "AiProviderError";
   }
 }
 
@@ -81,8 +93,8 @@ export class AiProvider {
 
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(
-          `AI provider error ${res.status}: ${detail.slice(0, 300)}`,
+        throw new AiProviderError(
+          `AI provider error ${res.status}: ${detail.slice(0, 300) || res.statusText}`,
         );
       }
 
@@ -95,18 +107,35 @@ export class AiProvider {
         throw new ValidationError("AI provider returned an empty response.");
       }
 
-      const parsed = JSON.parse(content);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        throw new AiProviderError(
+          "AI provider returned invalid JSON. Please try again.",
+        );
+      }
       if (typeof parsed !== "object" || parsed === null) {
-        throw new ValidationError("AI provider returned invalid JSON.");
+        throw new AiProviderError(
+          "AI provider returned invalid JSON. Please try again.",
+        );
       }
 
       return parsed as Record<string, unknown>;
     } catch (err) {
-      if (err instanceof AiProviderUnavailableError) throw err;
-      if ((err as Error).name === "AbortError") {
-        throw new Error("AI scoring timed out. Please try again.");
+      if (
+        err instanceof AiProviderUnavailableError ||
+        err instanceof AiProviderError ||
+        err instanceof ValidationError
+      ) {
+        throw err;
       }
-      throw err;
+      if ((err as Error).name === "AbortError") {
+        throw new AiProviderError("AI request timed out. Please try again.");
+      }
+      throw new AiProviderError(
+        `AI provider request failed: ${(err as Error).message?.slice(0, 300) ?? "unknown error"}`,
+      );
     } finally {
       clearTimeout(timeout);
     }

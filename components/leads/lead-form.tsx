@@ -41,6 +41,8 @@ export interface LeadFormProps {
   mode: "create" | "edit";
   leadId?: string;
   initial?: Partial<LeadFormValues>;
+  customStatuses?: { key: string; label: string }[];
+  customSources?: { key: string; label: string }[];
 }
 
 function toValues(initial?: Partial<LeadFormValues>): LeadFormValues {
@@ -64,7 +66,7 @@ function toValues(initial?: Partial<LeadFormValues>): LeadFormValues {
   };
 }
 
-export function LeadForm({ mode, leadId, initial }: LeadFormProps) {
+export function LeadForm({ mode, leadId, initial, customStatuses = [], customSources = [] }: LeadFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [values, setValues] = useState<LeadFormValues>(() => toValues(initial));
@@ -213,6 +215,12 @@ export function LeadForm({ mode, leadId, initial }: LeadFormProps) {
                 {LEAD_SOURCE_LABELS[s]}
               </option>
             ))}
+            {customSources.filter((s) => !(LEAD_SOURCES as readonly string[]).includes(s.key)).map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+            {values.source && !(LEAD_SOURCES as readonly string[]).includes(values.source) && !customSources.some((s) => s.key === values.source) && (
+              <option value={values.source}>{values.source} (inactive)</option>
+            )}
           </Select>
         </FormField>
         <FormField label="Status" htmlFor="status">
@@ -226,6 +234,12 @@ export function LeadForm({ mode, leadId, initial }: LeadFormProps) {
                 {LEAD_STATUS_LABELS[s]}
               </option>
             ))}
+            {customStatuses.filter((s) => !(LEAD_STATUSES as readonly string[]).includes(s.key)).map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+            {values.status && !(LEAD_STATUSES as readonly string[]).includes(values.status) && !customStatuses.some((s) => s.key === values.status) && (
+              <option value={values.status}>{values.status} (inactive)</option>
+            )}
           </Select>
         </FormField>
         <FormField label="Budget" htmlFor="budget">

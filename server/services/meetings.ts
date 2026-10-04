@@ -83,6 +83,28 @@ export class MeetingService extends BaseService {
       await this.repo.replaceParticipants(meeting.id, input.participants);
     }
 
+    // Upcoming-meeting notification to the organizer and invited users.
+    try {
+      const notify = new NotificationService(this.repo.orgId);
+      const userIds = new Set<string>();
+      if (meeting.organizerId) userIds.add(meeting.organizerId);
+      for (const p of input.participants ?? []) {
+        if (p.userId) userIds.add(p.userId);
+      }
+      for (const userId of userIds) {
+        await notify.notify({
+          userId,
+          type: "meeting_reminder",
+          title: `Upcoming meeting: ${meeting.title}`,
+          message: `Scheduled for ${meeting.scheduledAt.toISOString()}.`,
+          entityType: "meeting",
+          entityId: meeting.id,
+        });
+      }
+    } catch {
+      // Notifications must never break meeting creation.
+    }
+
     await new ActivityService(this.repo.orgId).recordActivity({
       type: "meeting",
       subject: input.title,

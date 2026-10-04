@@ -41,6 +41,10 @@ export const STAGE_KEYS = [
   "lost",
 ] as const;
 
+// Pipeline settings allow organization-specific keys. Keep their shape
+// constrained while validating existence and tenant ownership in the service.
+const stageKeySchema = z.string().trim().min(1).max(32).regex(/^[a-z0-9_]+$/);
+
 export const createOpportunitySchema = z.object({
   name: z.string().trim().min(1, "Opportunity name is required.").max(255),
   clientId: z.string().uuid(),
@@ -48,7 +52,7 @@ export const createOpportunitySchema = z.object({
   amount: optionalAmount,
   probability: optionalProbability,
   expectedCloseDate: optionalDate,
-  stageKey: z.enum(STAGE_KEYS).default("new"),
+  stageKey: stageKeySchema.default("new"),
   source: z.enum(OPPORTUNITY_SOURCES).optional(),
   productService: optionalString(255),
   description: optionalString(10_000),
@@ -62,14 +66,14 @@ export const updateOpportunitySchema = createOpportunitySchema
   });
 
 export const opportunityStageSchema = z.object({
-  stageKey: z.enum(STAGE_KEYS),
+  stageKey: stageKeySchema,
   probability: optionalProbability,
   reason: optionalString(2000),
   notes: optionalString(2000),
 });
 
 export const opportunityFilterSchema = z.object({
-  stageKey: z.enum(STAGE_KEYS).optional(),
+  stageKey: stageKeySchema.optional(),
   clientId: z.string().uuid().optional(),
   ownerId: z.string().uuid().optional(),
 });

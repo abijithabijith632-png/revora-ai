@@ -32,6 +32,14 @@ export default async function ActivitiesPage() {
       <PageHeader
         title="Activities"
         description="Unified timeline of calls, emails, meetings, notes, and follow-ups."
+        actions={
+          <a
+            href="#log-activity"
+            className="inline-flex h-8 items-center rounded-md bg-brand-600 px-3 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+          >
+            + New Activity
+          </a>
+        }
       />
 
       {reminders.overdue.length > 0 && (
@@ -58,7 +66,7 @@ export default async function ActivitiesPage() {
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <Card id="log-activity">
             <CardHeader>
               <CardTitle>Log activity</CardTitle>
               <CardDescription>Record a call, email, note, or meeting.</CardDescription>

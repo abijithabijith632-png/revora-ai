@@ -20,7 +20,7 @@ export async function PATCH(
     const { key } = await params;
     const input = parseBody(req, patchSchema);
     const service = new LeadConfigService(session.organizationId);
-    const row = await service.upsertStatus({ userId: session.userId }, { key, ...(await input) });
+    const row = await service.upsertStatus({ userId: session.userId }, { key, ...(await input) }, "update");
     return success(row, { message: "Lead status updated." });
   } catch (error) {
     return failure(error);

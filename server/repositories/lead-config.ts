@@ -104,11 +104,13 @@ export class LeadConfigRepository extends TenantRepository {
   }
 
   async deactivateStatus(key: string) {
-    return this.upsertStatus({ key, label: key, isActive: false });
+    const existing = await this.findStatusByKey(key);
+    return this.upsertStatus({ key, label: existing?.label ?? key, isActive: false });
   }
 
   async deactivateSource(key: string) {
-    return this.upsertSource({ key, label: key, isActive: false });
+    const existing = await this.findSourceByKey(key);
+    return this.upsertSource({ key, label: existing?.label ?? key, isActive: false });
   }
 
   /** Count references to a status key across active leads (safe-guard). */
@@ -120,6 +122,20 @@ export class LeadConfigRepository extends TenantRepository {
         and(
           eq(leads.organizationId, this.organizationId),
           eq(leads.status, status),
+        ),
+      );
+    return row?.count ?? 0;
+  }
+
+  /** Count references to a source key across active leads (safe-guard). */
+  async countLeadsBySource(source: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sqlCount() })
+      .from(leads)
+      .where(
+        and(
+          eq(leads.organizationId, this.organizationId),
+          eq(leads.source, source),
         ),
       );
     return row?.count ?? 0;

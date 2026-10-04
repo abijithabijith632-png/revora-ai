@@ -122,6 +122,14 @@ export class NotificationRepository extends TenantRepository {
     return rows;
   }
 
+  async remove(userId: string, id: string) {
+    const [row] = await this.db
+      .delete(notifications)
+      .where(and(eq(notifications.id, id), this.baseWhere(userId)))
+      .returning({ id: notifications.id });
+    return row ?? null;
+  }
+
   /* -------------------------------------------------------------
    * Preferences
    * ------------------------------------------------------------ */

@@ -14,6 +14,13 @@ import {
 } from "@/lib/opportunities/pipeline";
 import { formatMoney } from "@/lib/money";
 
+interface KanbanStage {
+  key: string;
+  name: string;
+  orderIndex: number;
+  isTerminal: boolean;
+}
+
 interface KanbanCard {
   id: string;
   opportunityNumber: string;
@@ -26,7 +33,13 @@ interface KanbanCard {
   stageKey: string;
 }
 
-export function OpportunityKanban({ cards }: { cards: KanbanCard[] }) {
+export function OpportunityKanban({
+  cards,
+  stages,
+}: {
+  cards: KanbanCard[];
+  stages: KanbanStage[];
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [items, setItems] = useState<KanbanCard[]>(cards);
@@ -34,13 +47,42 @@ export function OpportunityKanban({ cards }: { cards: KanbanCard[] }) {
 
   async function drop(targetKey: string, card: KanbanCard) {
     if (card.stageKey === targetKey) return;
-    if (!canTransition(card.stageKey as PipelineStageKey, targetKey as PipelineStageKey)) {
+    const source = stages.find((stage) => stage.key === card.stageKey);
+    const target = stages.find((stage) => stage.key === targetKey);
+    const canonicalKeys = new Set(PIPELINE_STAGES.map((stage) => stage.key));
+    const canonicalTransition = canonicalKeys.has(card.stageKey as PipelineStageKey)
+      && canonicalKeys.has(targetKey as PipelineStageKey)
+      && canTransition(card.stageKey as PipelineStageKey, targetKey as PipelineStageKey);
+    const configuredTransition = Boolean(
+      source && target && !source.isTerminal && target.orderIndex > source.orderIndex,
+    );
+    if (!canonicalTransition && !configuredTransition) {
       toast({
         variant: "error",
         title: "Invalid transition",
-        description: `Cannot move from ${stageLabel(card.stageKey)} to ${stageLabel(targetKey)}.`,
+        description: `Cannot move from ${source?.name ?? stageLabel(card.stageKey)} to ${target?.name ?? stageLabel(targetKey)}.`,
       });
       return;
+    }
+
+    // Moving to Lost requires a reason server-side; collect it before the
+    // optimistic update so the request can succeed instead of 400ing.
+    let reason: string | undefined;
+    if (targetKey === "lost") {
+      const entered =
+        typeof window !== "undefined"
+          ? window.prompt("Reason for loss? (e.g. price, timing, competitor)")
+          : null;
+      if (entered === null) return;
+      reason = entered.trim();
+      if (!reason) {
+        toast({
+          variant: "error",
+          title: "Reason required",
+          description: "A loss reason is required when moving to Lost.",
+        });
+        return;
+      }
     }
 
     // Optimistic update.
@@ -53,10 +95,15 @@ export function OpportunityKanban({ cards }: { cards: KanbanCard[] }) {
       const res = await fetch(`/api/opportunities/${card.id}/stage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stageKey: targetKey }),
+        body: JSON.stringify(
+          reason ? { stageKey: targetKey, reason } : { stageKey: targetKey },
+        ),
       });
-      const json = await res.json();
-      if (!json.success) throw new Error(json?.error?.message ?? "Failed");
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success)
+        throw new Error(
+          json?.error?.message ?? `Request failed (${res.status}).`,
+        );
       toast({ variant: "success", title: "Opportunity moved." });
       router.refresh();
     } catch (err) {
@@ -72,7 +119,7 @@ export function OpportunityKanban({ cards }: { cards: KanbanCard[] }) {
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
-      {PIPELINE_STAGES.map((stage) => {
+      {[...stages].sort((a, b) => a.orderIndex - b.orderIndex).map((stage) => {
         const stageCards = items.filter((c) => c.stageKey === stage.key);
         return (
           <div
@@ -88,7 +135,7 @@ export function OpportunityKanban({ cards }: { cards: KanbanCard[] }) {
             }}
           >
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <span className="text-sm font-semibold text-foreground">{stage.label}</span>
+              <span className="text-sm font-semibold text-foreground">{stage.name}</span>
               <Badge variant={stageVariant(stage.key)}>{stageCards.length}</Badge>
             </div>
             <div className="flex-1 space-y-2 p-2">

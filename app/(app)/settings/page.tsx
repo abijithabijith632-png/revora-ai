@@ -4,6 +4,7 @@ import { userHasPermission } from "@/lib/permissions/authorize";
 import { OrganizationSettingsService } from "@/server/services/organization-settings";
 import { formatMoney } from "@/lib/money";
 import { PageHeader, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@/components/ui";
+import { OrganizationForm } from "@/components/admin/organization-form";
 
 export const metadata = { title: "Organization Settings" };
 
@@ -39,14 +40,22 @@ export default async function SettingsPage() {
           <CardTitle>Company Profile</CardTitle>
           <CardDescription>Identity and contact information for your organization.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Company name" value={profile.name} />
-          <Field label="Industry" value={profile.industry} />
-          <Field label="Website" value={profile.website} />
-          <Field label="Contact email" value={profile.contactEmail} />
-          <Field label="Contact phone" value={profile.contactPhone} />
-          <Field label="Address" value={profile.address} />
-          <Field label="Description" value={profile.description} />
+        <CardContent>
+          <OrganizationForm
+            initial={{
+              name: profile.name,
+              industry: profile.industry,
+              website: profile.website,
+              contactEmail: profile.contactEmail,
+              contactPhone: profile.contactPhone,
+              address: profile.address,
+              description: profile.description,
+              logoUrl: profile.logoUrl,
+              currency: settings?.currency ?? profile.currency,
+              timezone: settings?.timezone ?? profile.timezone,
+              dateFormat: settings?.dateFormat ?? "MMM d, yyyy",
+            }}
+          />
         </CardContent>
       </Card>
 

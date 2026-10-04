@@ -4,11 +4,14 @@ import { requireApiContext } from "@/lib/api/context";
 import { OpportunityService } from "@/server/services/opportunities";
 import { opportunityStageSchema } from "@/lib/opportunities/schemas";
 
-export async function POST(
+async function handleStageChange(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  params: Promise<{ id: string }>,
 ) {
   try {
+    // Tenant comes from the authenticated session, never the client. Requires
+    // opportunities.edit so authorized moves (e.g. Final Review -> Won) return
+    // 200, while missing permission returns 403 and unknown ids return 404.
     const session = await requireApiContext("opportunities.edit");
     const id = await parsePathId(params);
     const input = await parseBody(req, opportunityStageSchema);
@@ -20,4 +23,25 @@ export async function POST(
   } catch (error) {
     return failure(error);
   }
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  return handleStageChange(req, params);
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  return handleStageChange(req, params);
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  return handleStageChange(req, params);
 }

@@ -3,6 +3,7 @@ import { Users, Inbox, Target, UserX, UserCog } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { userHasPermission } from "@/lib/permissions/authorize";
 import { AssignmentService } from "@/server/services/assignment";
+import { NewAssignmentButton } from "@/components/leads";
 import {
   PageHeader,
   KpiCard,
@@ -39,7 +40,8 @@ export default async function AssignmentsPage() {
       <PageHeader
         title="Lead Assignments"
         description="Assignment telemetry and executive workload."
-      />
+        actions={<NewAssignmentButton />}
+/>
 
       <section aria-label="Assignment KPIs">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

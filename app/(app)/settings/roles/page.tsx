@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { userHasPermission } from "@/lib/permissions/authorize";
-import { listOrgRoles } from "@/lib/permissions/rbac-service";
-import { PageHeader, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from "@/components/ui";
+import { listOrgRoles, listOrgUsers } from "@/lib/permissions/rbac-service";
+import { PageHeader } from "@/components/ui";
+import { RoleCards } from "@/components/admin/role-cards";
 
 export const metadata = { title: "Roles" };
 
@@ -11,31 +12,33 @@ export default async function RolesPage() {
   const allowed = await userHasPermission(session.userId, session.organizationId, "roles.view");
   if (!allowed) redirect("/forbidden");
 
-  const roles = await listOrgRoles(session.organizationId);
+  const [roles, users] = await Promise.all([
+    listOrgRoles(session.organizationId),
+    listOrgUsers(session.organizationId),
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Roles"
-        description="Role hierarchy and permission summary."
+        description="Role hierarchy and permission summary. Select a role to view assigned users and permissions."
       />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {roles.map((role) => (
-          <Card key={role.id} interactive>
-            <CardHeader>
-              <CardTitle>{role.name}</CardTitle>
-              <CardDescription>
-                {role.userCount} user{role.userCount === 1 ? "" : "s"} · {role.permissionCount} permissions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Badge variant={role.isSystem ? "info" : "default"}>
-                {role.isSystem ? "System role" : "Custom role"}
-              </Badge>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <RoleCards
+        roles={roles.map((r) => ({
+          id: r.id,
+          name: r.name,
+          isSystem: r.isSystem,
+          userCount: r.userCount,
+          permissionCount: r.permissionCount,
+          permissions: r.permissions,
+        }))}
+        users={users.map((u) => ({
+          id: u.id,
+          fullName: u.fullName,
+          email: u.email,
+          roles: u.roles,
+        }))}
+      />
     </div>
   );
 }
