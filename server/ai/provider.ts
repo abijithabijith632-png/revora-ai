@@ -1,5 +1,6 @@
 import { serverEnv } from "@/config/env";
-import { AppError, ConfigurationError, ValidationError } from "@/lib/errors";
+import { AppError } from "@/lib/errors";
+import type { z } from "zod";
 
 /**
  * Server-only OpenAI-compatible AI provider client (Groq by default).
@@ -19,21 +20,20 @@ export interface StructuredAiRequest {
   jsonMode?: boolean;
 }
 
-export class AiProviderUnavailableError extends ConfigurationError {
+export class AiProviderUnavailableError extends AppError {
   constructor() {
-    super("AI features are unavailable because the AI provider is not configured.");
+    super("SERVICE_UNAVAILABLE", "AI features are unavailable because the AI provider is not configured.");
     this.name = "AiProviderUnavailableError";
   }
 }
 
 /**
  * AI provider failure with an actionable message (HTTP error, timeout, or
- * unparsable response). Surfaced as INTERNAL_ERROR so callers return a
- * meaningful 500 instead of "An unexpected error occurred."
+ * unparsable response). Provider failures are reported as 502 responses.
  */
 export class AiProviderError extends AppError {
   constructor(message: string) {
-    super("INTERNAL_ERROR", message);
+    super("AI_PROVIDER_ERROR", message);
     this.name = "AiProviderError";
   }
 }
@@ -92,9 +92,23 @@ export class AiProvider {
       );
 
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
+        const detail = await res.json().catch(() => null) as {
+          error?: { code?: unknown; message?: unknown };
+        } | null;
+        const providerCode = typeof detail?.error?.code === "string"
+          ? detail.error.code.replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 80)
+          : "";
+        console.warn("[ai:provider] Upstream request was rejected.", {
+          status: res.status,
+          ...(providerCode ? { providerCode } : {}),
+        });
+        const hint = providerCode === "model_not_found"
+          ? "The configured AI_MODEL is unavailable; select a supported model and redeploy."
+          : providerCode === "invalid_api_key" || providerCode === "authentication_error"
+            ? "Check the server-side AI provider credentials."
+            : "Check the AI provider configuration and try again.";
         throw new AiProviderError(
-          `AI provider error ${res.status}: ${detail.slice(0, 300) || res.statusText}`,
+          `AI provider error ${res.status}${providerCode ? ` (${providerCode})` : ""}. ${hint}`,
         );
       }
 
@@ -104,7 +118,7 @@ export class AiProvider {
 
       const content = json.choices?.[0]?.message?.content;
       if (!content) {
-        throw new ValidationError("AI provider returned an empty response.");
+        throw new AiProviderError("AI provider returned an empty response.");
       }
 
       let parsed: unknown;
@@ -125,21 +139,44 @@ export class AiProvider {
     } catch (err) {
       if (
         err instanceof AiProviderUnavailableError ||
-        err instanceof AiProviderError ||
-        err instanceof ValidationError
+        err instanceof AiProviderError
       ) {
         throw err;
       }
       if ((err as Error).name === "AbortError") {
+        console.warn("[ai:provider] Upstream request timed out.");
         throw new AiProviderError("AI request timed out. Please try again.");
       }
-      throw new AiProviderError(
-        `AI provider request failed: ${(err as Error).message?.slice(0, 300) ?? "unknown error"}`,
-      );
+      // Fetch errors can include a configured endpoint URL. Keep details out of
+      // client responses; structured status/code details are handled above.
+      console.warn("[ai:provider] Upstream connection failed.", {
+        errorName: err instanceof Error ? err.name : "UnknownError",
+      });
+      throw new AiProviderError("AI provider request failed. Check provider connectivity and try again.");
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+/** Log only safe error metadata when a caller intentionally uses deterministic fallback. */
+export function reportAiFallback(feature: string, error: unknown): void {
+  const known = error instanceof AppError;
+  const name = error instanceof Error ? error.name : "UnknownError";
+  console.warn("[ai:fallback] Provider-assisted result unavailable; using the documented deterministic fallback.", {
+    feature,
+    errorName: name,
+    ...(known ? { errorCode: error.code } : {}),
+  });
+}
+
+/** Validate generated content and map malformed model output as an upstream error. */
+export function parseAiResponse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new AiProviderError("AI provider returned a response in an unexpected format. Please try again.");
+  }
+  return result.data;
 }
 
 /** Singleton provider instance. */

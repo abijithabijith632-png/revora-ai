@@ -51,6 +51,7 @@ export default async function AuditLogsPage({
   const session = await requireSession();
   const allowed = await userHasPermission(session.userId, session.organizationId, "audit_logs.view");
   if (!allowed) redirect("/forbidden");
+  const canExport = await userHasPermission(session.userId, session.organizationId, "audit_logs.export");
 
   const sp = await searchParams;
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
@@ -143,14 +144,18 @@ export default async function AuditLogsPage({
       <PageHeader
         title="Audit Logs"
         description={`Administrative actions for your organization. Times shown in ${timeZone}.`}
-        actions={
+        actions={canExport ? (
           <a
             href={exportHref}
             className="inline-flex h-8 items-center rounded-md border border-border-strong bg-transparent px-3 text-sm text-foreground transition-colors hover:bg-surface-subtle"
           >
             Export CSV
           </a>
-        }
+        ) : (
+          <span className="text-sm text-muted-foreground" role="note">
+            CSV export is restricted for your role.
+          </span>
+        )}
       />
 
       <Card>

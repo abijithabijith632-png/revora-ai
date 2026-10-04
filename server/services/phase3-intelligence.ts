@@ -2,11 +2,10 @@ import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { activities, aiInsights, clients, communications, contacts, followups, leads, meetings, opportunities, opportunityStageHistory, pipelineStages, proposals, tasks, users } from "@/db/schema";
-import { aiProvider } from "@/server/ai/provider";
+import { aiProvider, AiProviderUnavailableError, parseAiResponse, reportAiFallback } from "@/server/ai/provider";
 import { calculateBuyingIntent } from "@/server/ai/buying-intent";
 import { ForecastingService } from "@/server/services/forecasting";
-import { ConfigurationError, ForbiddenError, NotFoundError } from "@/lib/errors";
-import { parseAndValidate } from "@/lib/validation";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 
 const resultSchema = z.object({ summary: z.string().min(1).max(700), relationshipStatus: z.string().min(1).max(120), recommendedActions: z.array(z.string().min(1).max(220)).max(5) });
 const briefSchema = z.object({ summary: z.string().min(1).max(700), recommendations: z.array(z.string().min(1).max(220)).max(5) });
@@ -39,9 +38,9 @@ export class Phase3IntelligenceService {
     let value = { summary: d.account.name + " is " + d.account.status + (d.account.vip ? " and marked VIP." : "."), relationshipStatus: d.signals.join("; "), recommendedActions: d.followups.filter((x) => x.scheduledAt < new Date()).map((x) => x.action ?? "Complete overdue follow-up").slice(0, 3) };
     let model = "deterministic_crm_fallback";
     if (aiProvider.isConfigured && (d.activities.length + d.opportunities.length + d.followups.length + d.proposals.length)) try {
-      value = parseAndValidate(resultSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Summarize this account using only CRM records. Do not infer news, revenue, sentiment, employees, or competitors. Return JSON summary, relationshipStatus, recommendedActions.", user: JSON.stringify({ account: d.account, contacts: d.contacts, opportunities: d.opportunities, activities: d.activities, meetings: d.meetings, followups: d.followups, tasks: d.tasks, proposals: d.proposals, communications: d.communications.map((x) => ({ opened: Boolean(x.openedAt), clicked: Boolean(x.clickedAt) })), stageMoves: d.stageMoves }) }));
+      value = parseAiResponse(resultSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Summarize this account using only CRM records. Do not infer news, revenue, sentiment, employees, or competitors. Return JSON summary, relationshipStatus, recommendedActions.", user: JSON.stringify({ account: d.account, contacts: d.contacts, opportunities: d.opportunities, activities: d.activities, meetings: d.meetings, followups: d.followups, tasks: d.tasks, proposals: d.proposals, communications: d.communications.map((x) => ({ opened: Boolean(x.openedAt), clicked: Boolean(x.clickedAt) })), stageMoves: d.stageMoves }) }));
       model = aiProvider.model;
-    } catch { model = "deterministic_provider_fallback"; }
+    } catch (error) { reportAiFallback("account_summary", error); model = "deterministic_provider_fallback"; }
     const [row] = await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "client", entityId: id, insightType: "client_summary", result: value.relationshipStatus.slice(0, 255), reasons: d.signals as string[], recommendation: value.recommendedActions.join(" "), supportingData: { summary: value.summary, generatedBy: actor, sourceFreshAt: d.sourceFreshAt }, modelVersion: model }).returning({ id: aiInsights.id, createdAt: aiInsights.createdAt });
     return { ...value, id: row.id, generatedAt: row.createdAt.toISOString(), sourceFreshAt: d.sourceFreshAt, method: model };
   }
@@ -69,9 +68,9 @@ export class Phase3IntelligenceService {
     if (current.score === null) return current;
     let explanation = current.explanation; let recommendation = current.recommendedAction; let model = current.provenance;
     if (aiProvider.isConfigured) try {
-      const parsed = parseAndValidate(z.object({ explanation: z.string().min(1).max(400), recommendedAction: z.string().min(1).max(220) }), await aiProvider.generateStructured({ jsonMode: true, system: "Explain only these first-party CRM buying signals. Do not imply external intent. Return JSON explanation and recommendedAction.", user: JSON.stringify({ level: current.level, score: current.score, signals: current.signals }) }));
+      const parsed = parseAiResponse(z.object({ explanation: z.string().min(1).max(400), recommendedAction: z.string().min(1).max(220) }), await aiProvider.generateStructured({ jsonMode: true, system: "Explain only these first-party CRM buying signals. Do not imply external intent. Return JSON explanation and recommendedAction.", user: JSON.stringify({ level: current.level, score: current.score, signals: current.signals }) }));
       explanation = parsed.explanation; recommendation = parsed.recommendedAction; model = aiProvider.model;
-    } catch { model = "deterministic_provider_fallback"; }
+    } catch (error) { reportAiFallback("lead_buying_intent", error); model = "deterministic_provider_fallback"; }
     const intent = { ...current, explanation, recommendedAction: recommendation, provenance: model, generatedAt: new Date().toISOString() };
     await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "lead", entityId: id, insightType: "risk", result: current.level + " buying intent", score: current.score, reasons: current.signals, recommendation, supportingData: { intent, sourceFreshAt: current.sourceFreshAt }, modelVersion: model });
     return intent;
@@ -109,8 +108,8 @@ export class Phase3IntelligenceService {
   async brief(user: { userId: string; roleNames: string[] }) {
     const d = await this.daily(user);
     if (d.noData) return { summary: "Insufficient CRM data to prepare a useful sales brief.", recommendations: [], method: "insufficient_data" };
-    if (!aiProvider.isConfigured) throw new ConfigurationError("AI sales brief generation is unavailable because the AI provider is not configured.");
-    const result = parseAndValidate(briefSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Write a concise sales brief using only CRM records. Do not invent facts. Return JSON summary and recommendations.", user: JSON.stringify({ day: d.day, items: d.items.slice(0, 12), meetings: d.meetings, opportunities: d.opportunities, pipelineChanges: d.pipelineChanges, risks: d.opportunityRisks, overdue: d.overdueFollowups }) }));
+    if (!aiProvider.isConfigured) throw new AiProviderUnavailableError();
+    const result = parseAiResponse(briefSchema, await aiProvider.generateStructured({ jsonMode: true, system: "Write a concise sales brief using only CRM records. Do not invent facts. Return JSON summary and recommendations.", user: JSON.stringify({ day: d.day, items: d.items.slice(0, 12), meetings: d.meetings, opportunities: d.opportunities, pipelineChanges: d.pipelineChanges, risks: d.opportunityRisks, overdue: d.overdueFollowups }) }));
     const [savedBrief] = await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "user", entityId: user.userId, insightType: "next_action", result: result.summary.slice(0, 255), recommendation: result.recommendations.join(" "), supportingData: { day: d.day, freshAt: d.sourceFreshAt, ...result }, modelVersion: aiProvider.model }).returning({ createdAt: aiInsights.createdAt });
     return { ...result, generatedAt: savedBrief.createdAt.toISOString(), method: aiProvider.model };
   }
@@ -144,9 +143,9 @@ export class Phase3IntelligenceService {
     if (saved?.kind === "sales_rep_coaching" && saved.signature === signature) return { ...data, coaching: saved.coaching, coachingGeneratedAt: prior?.createdAt.toISOString() ?? null, cached: true, aiUnavailable: false };
     let coaching: Array<{ userId: string; insight: string }>;
     try {
-      const out = parseAndValidate(z.object({ coaching: z.array(z.object({ userId: z.string().uuid(), insight: z.string().min(1).max(300) })).max(150) }), await aiProvider.generateStructured({ jsonMode: true, system: "Give neutral coaching observations using only supplied CRM counts. Do not rank reps, assess personality, or make unsupported performance claims. Return JSON coaching array with userId and one concise insight.", user: JSON.stringify(metrics) }));
+      const out = parseAiResponse(z.object({ coaching: z.array(z.object({ userId: z.string().uuid(), insight: z.string().min(1).max(300) })).max(150) }), await aiProvider.generateStructured({ jsonMode: true, system: "Give neutral coaching observations using only supplied CRM counts. Do not rank reps, assess personality, or make unsupported performance claims. Return JSON coaching array with userId and one concise insight.", user: JSON.stringify(metrics) }));
       const allowed = new Set(metrics.map((x) => x.userId)); coaching = out.coaching.filter((x) => allowed.has(x.userId));
-    } catch { return { ...data, coaching: null, aiUnavailable: true, error: "AI coaching is unavailable." }; }
+    } catch (error) { reportAiFallback("sales_coaching", error); return { ...data, coaching: null, aiUnavailable: true, error: "AI coaching is unavailable." }; }
     const [savedCoaching] = await db.insert(aiInsights).values({ organizationId: this.orgId, entityType: "sales_rep_coaching", entityId: user.userId, insightType: "next_action", result: "Sales rep coaching observations", reasons: [], recommendation: "Review CRM activity patterns with context.", supportingData: { kind: "sales_rep_coaching", signature, coaching }, modelVersion: aiProvider.model }).returning({ createdAt: aiInsights.createdAt });
     return { ...data, coaching, coachingGeneratedAt: savedCoaching.createdAt.toISOString(), aiUnavailable: false };
   }

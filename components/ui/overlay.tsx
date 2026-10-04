@@ -18,12 +18,14 @@ import { Button } from "./button";
 
 function useOverlay(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
 
     document.addEventListener("keydown", onKey);
@@ -36,7 +38,7 @@ function useOverlay(open: boolean, onClose: () => void) {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return panelRef;
 }

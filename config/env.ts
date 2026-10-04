@@ -19,6 +19,12 @@
 
 import { ConfigurationError } from "@/lib/errors";
 
+const AI_DEFAULT_MODEL = "openai/gpt-oss-120b";
+const DEPRECATED_AI_MODELS = new Set([
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+]);
+
 const requiredString = (name: string, value: string | undefined): string => {
   if (!value) {
     throw new ConfigurationError(
@@ -125,7 +131,18 @@ export const serverEnv: ServerEnv = {
     return process.env.AI_PROVIDER_API_KEY ?? "";
   },
   get aiModel() {
-    return process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
+    const configured = process.env.AI_MODEL?.trim();
+    if (!configured) return AI_DEFAULT_MODEL;
+    if (DEPRECATED_AI_MODELS.has(configured) || configured.startsWith("llama3-")) {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("[ai:config] Ignoring a deprecated AI_MODEL; using the configured current default.", {
+          configuredModel: configured,
+          effectiveModel: AI_DEFAULT_MODEL,
+        });
+      }
+      return AI_DEFAULT_MODEL;
+    }
+    return configured;
   },
   get aiBaseUrl() {
     return process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1";

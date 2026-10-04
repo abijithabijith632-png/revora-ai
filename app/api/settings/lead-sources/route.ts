@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireApiContext("lead_sources.create");
+    const session = await requireApiContext("lead_sources.edit");
     const input = parseBody(req, upsertSchema);
     const service = new LeadConfigService(session.organizationId);
     const row = await service.upsertSource({ userId: session.userId }, await input, "create");

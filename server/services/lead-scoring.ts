@@ -4,7 +4,7 @@ import { LeadRepository } from "@/server/repositories/leads";
 import { QualificationRepository } from "@/server/repositories/qualification";
 import { db } from "@/db";
 import { aiInsights, leads } from "@/db/schema";
-import { aiProvider } from "@/server/ai/provider";
+import { aiProvider, parseAiResponse, reportAiFallback } from "@/server/ai/provider";
 import { buildScoringContext, buildPrompt } from "@/server/ai/scoring-context";
 import { aiScoreResponseSchema, normalizeFactorKeys, scoreToLevel } from "@/server/ai/score-schema";
 import { recordAudit } from "@/lib/api/audit";
@@ -89,9 +89,10 @@ export class LeadScoringService extends BaseService {
       try {
         const raw = await aiProvider.generateStructured({ system: prompt.system, user: prompt.user, jsonMode: true });
         const reasons = normalizeFactorKeys(Array.isArray(raw?.reasons) ? (raw.reasons as unknown[]) : []);
-        parsed = parseAndValidate(aiScoreResponseSchema, { ...(raw as Record<string, unknown>), reasons });
+        parsed = parseAiResponse(aiScoreResponseSchema, { ...(raw as Record<string, unknown>), reasons });
         provenance = "provider_assisted";
-      } catch {
+      } catch (error) {
+        reportAiFallback("lead_score", error);
         parsed = this.insufficientDataScore(context.availableFields, context.totalFields);
         provenance = "deterministic_provider_fallback";
       }

@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireApiContext("lead_statuses.create");
+    const session = await requireApiContext("lead_statuses.edit");
     const input = parseBody(req, upsertSchema);
     const service = new LeadConfigService(session.organizationId);
     const row = await service.upsertStatus({ userId: session.userId }, await input, "create");
