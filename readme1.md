@@ -23,10 +23,10 @@ Phases 1–4 are present in the current working tree. Earlier implementation wor
 - Activities, tasks, follow-ups, meetings, proposals, documents, email templates, and notifications.
 - Analytics, dashboard, forecasting, deal-risk and sales reporting capabilities.
 
-### Phase 2 — AI assistance and sales sequences
+### Phase 2 — Shared AI infrastructure and sales sequences
 
 - Shared server-side AI provider used for structured output.
-- AI copilot, email drafting, meeting summary, and conversation analysis services and routes.
+- Shared provider-backed lead assignment recommendations and meeting summaries.
 - Sales sequence schema, service, UI, and API routes. Sequence email steps create drafts; they do not send email automatically.
 - Lead assignment recommendations and existing assignment services.
 
@@ -37,13 +37,11 @@ Phases 1–4 are present in the current working tree. Earlier implementation wor
 - Smart alerts, data-quality checks, sales-representative intelligence, daily priorities, and daily sales brief.
 - These capabilities reuse existing CRM data and services; account research does not claim unverified external facts.
 
-### Phase 4 — AI agents and responsive improvements
+### Optional AI modules
 
-- Central agent framework with Lead, Deal, Research/Account, Follow-up, Forecast, and Meeting agents.
-- Structured output validation and provider-failure fallback for agent analysis.
-- Recommendations are separated from actions. Supported task, follow-up, assignment, and email-draft operations require explicit confirmation and use existing application services. Email actions create drafts only.
-- Agent runs and confirmed actions use existing audit infrastructure. Agent prompts avoid unnecessary lead email exposure by sending email availability instead of the address.
-- Responsive improvements to navigation, CRM tables, touch targets, forms, agent UI, and intelligence panels.
+- AI Assistant and AI Agents were removed from the current release. Their pages, navigation, API routes, and feature-specific services are no longer part of the application.
+- The shared AI provider remains for required lead scoring, meeting summaries, assignment recommendations, and Sales Intelligence.
+- Responsive improvements to navigation, CRM tables, touch targets, forms, and intelligence panels remain.
 
 ## Architecture and important locations
 
@@ -51,20 +49,20 @@ Phases 1–4 are present in the current working tree. Earlier implementation wor
 |---|---|
 | `app/` | Next.js pages, layouts, loading/error states, and API Route Handlers |
 | `app/(auth)/` | Login, registration, verification, and password recovery pages |
-| `app/(app)/` | Authenticated dashboard, CRM, analytics, intelligence, agents, sequences, and settings pages |
-| `app/api/` | HTTP APIs grouped by CRM domain, analytics, AI, agents, auth, and sequences |
+| `app/(app)/` | Authenticated dashboard, CRM, analytics, intelligence, sequences, and settings pages |
+| `app/api/` | HTTP APIs grouped by CRM domain, analytics, retained AI features, auth, and sequences |
 | `components/ui/` | Shared buttons, cards, forms, tables, overlays, badges, and other UI primitives |
 | `components/layout/` | App shell, navigation, sidebar, and top bar |
 | `components/ai/`, `components/analytics/`, `components/sequences/` | AI workspaces and visualizations, analytics UI, and sequence UI |
 | `lib/auth/`, `lib/permissions/`, `lib/tenant/` | Session, authorization, and tenant context helpers |
 | `lib/api/`, `lib/errors/`, `lib/validation/` | API response envelopes, request parsing, rate-limit helper, audit helper, typed errors, and validation |
-| `server/ai/` | Existing AI provider, agent framework/contracts, scoring context, and buying-intent logic |
+| `server/ai/` | Shared AI provider, scoring context, and buying-intent logic |
 | `server/services/` | Business services for CRM, analytics, AI, sequences, and operations |
 | `server/repositories/` | Reusable data-access modules for CRM domains |
 | `db/schema/` | Drizzle schema definitions, including sales, operations, AI, and sequence entities |
 | `db/migrations/` | PostgreSQL migration SQL and Drizzle metadata |
 | `config/env.ts` | Server-only and public environment accessors |
-| `tests/` | Focused Node test files for intelligence and agent contracts |
+| `tests/` | Focused Node test files for intelligence, permissions, profile photo validation, and CRM regressions |
 | `e2e/`, `playwright.config.ts` | Playwright end-to-end test and browser configuration |
 
 The normal request path is:
@@ -101,24 +99,15 @@ APIs follow a shared response envelope (`success`, `data`, `message`, `meta`) an
 - `/api/analytics/*`, `/api/sales-intelligence/*`, `/api/reports` — forecast, risk, pipeline, priorities, alerts, and reporting.
 - `/api/ai/*`, `/api/leads/[id]/ai-score`, `/api/meetings/[id]/summary`, `/api/clients/[id]/intelligence` — existing AI and intelligence operations.
 - `/api/sequences/*` — sequence management, enrollment, status, and step evaluation.
-- `POST /api/agents/[agentId]` — run an authorized agent analysis.
-- `POST /api/agents/actions` — validate and execute a confirmed, allowed agent action through existing services.
 - `/api/notifications/*`, `/api/settings/*`, `/api/rbac/*`, `/api/billing/*` — platform capabilities.
 
-The authenticated organization comes from the server session; client-supplied organization IDs are not the tenant authority. Agent records are checked against organization scope and, where applicable, owner/organizer or account-manager scope. API-level cross-tenant behavior still needs isolated integration testing.
+The authenticated organization comes from the server session; client-supplied organization IDs are not the tenant authority. CRM APIs continue to enforce organization scope and record ownership where applicable.
 
 ## AI provider and action safety
 
 `server/ai/provider.ts` contains the shared OpenAI-compatible provider wrapper (Groq is the default configuration). It uses server-side environment values, a request timeout, structured JSON mode, and does not expose the provider key to client components. Feature services validate structured output and provide deterministic fallbacks where supported.
 
-Agent flow:
-
-```text
-authorized CRM context → structured recommendation → user review/confirmation
-  → validated action route → existing service → audit event
-```
-
-The model is not given database or shell execution capabilities. The action schema and route allow only defined actions. Agent actions do not delete CRM records, change permissions, or send email. Provider timeouts, missing credentials, provider outages, and malformed results have **not** been simulated against an integration environment in the latest hardening pass.
+AI Assistant and AI Agent API endpoints have been removed. Remaining AI routes continue to use the server-side shared provider and feature-specific authorization.
 
 ## Environment and local setup
 
@@ -144,7 +133,7 @@ Use Node.js 18.18 or later, npm, and a PostgreSQL database intended for developm
 | `npm run lint` | Full ESLint check |
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build locally |
-| `node --import tsx --test tests/phase3-intelligence.test.ts tests/phase4-agent-contracts.test.ts` | Focused unit tests used in the latest checks |
+| `npm run test:unit` | Unit, validation, permission, and CRM regression tests |
 | `npx drizzle-kit check` | Check Drizzle migration metadata consistency; does not apply SQL or prove PostgreSQL execution |
 | `npm run db:generate` | Generate migrations from schema changes |
 | `npm run db:migrate` | Apply migrations to the configured database |
@@ -161,7 +150,7 @@ There is no dedicated `test` script in `package.json`. A Playwright suite exists
 | Phase 3/4 focused unit tests | Passed: 6 tests |
 | `drizzle-kit check` | Passed; migration metadata check only |
 | PostgreSQL application of `0011_sales_sequences.sql` | Not verified — safe test database unavailable |
-| Agent API integration and two-tenant tests | Not verified — approved test environment unavailable |
+| Private profile photo integration with authenticated Blob storage | Requires a linked private Vercel Blob store and authenticated test environment |
 | Provider failure simulation | Not verified — no mocked provider/API integration tests executed |
 | Mobile/tablet/desktop browser validation | Not verified — no approved staging/browser target; Playwright config targets production |
 | Full authentication, CRM, analytics, AI, notification regression | Not verified end-to-end |
@@ -173,8 +162,8 @@ No production database operations or Playwright runs against production were per
 Before calling the platform release-verified:
 
 1. Provision an isolated PostgreSQL database and two test organizations; apply migrations there, including `0011_sales_sequences.sql`, then verify schema and sequence API behavior.
-2. Run API integration tests for all six agents and action routes: authentication, permissions, organization isolation, ownership, malformed input/output, provider failure, rate limits, action confirmation, and audit records.
-3. Exercise representative cross-tenant attempts across CRM, analytics, AI, notifications, and agent endpoints using direct IDs and client-supplied organization IDs.
+2. Run profile photo integration tests with a linked private Blob store: authentication, file validation, size limits, persistence, removal, and self-only access.
+3. Exercise representative cross-tenant attempts across CRM, analytics, retained AI, and notifications using direct IDs and client-supplied organization IDs.
 4. Run responsive Playwright checks at approximately 390×844, 768×1024, and 1440×900 against isolated staging. Current Playwright base URL must not be used for production testing or destructive flows.
 5. Run the regression scenarios for auth, CRM CRUD, Phase 1–4 intelligence, and sequences in an approved test environment.
 6. Decide whether production rate limiting requires a shared store. The current limiter is in-memory and counters are not shared across horizontally scaled instances.

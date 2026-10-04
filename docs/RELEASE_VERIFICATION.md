@@ -5,7 +5,7 @@ Date started: 2026-10-02. Code-complete items are done in-repo; live items need 
 ## Done in-repo (verifiable now)
 
 - [x] `npm run typecheck` — pass.
-- [x] `npm run test:unit` — 26 tests pass (6 legacy + 20 new: agents, provider-fallback, rate-limit, permissions, cross-tenant static guards, regression).
+- [x] `npm run test:unit` — historical run: 26 tests passed; optional AI Assistant and AI Agents have since been removed.
 - [x] `npx drizzle-kit check` — pass (metadata only).
 - [x] New `tests/release-integration.test.ts`, `tests/cross-tenant-guard.test.ts`, `tests/regression.test.ts`.
 - [x] `lib/api/rate-limit.ts` — pluggable `RateLimitStore`, `RATE_LIMIT_STORE` env, fail-closed on unbundled stores. Decision documented in `docs/OPERATIONS.md`.
@@ -28,8 +28,8 @@ Date started: 2026-10-02. Code-complete items are done in-repo; live items need 
 ## Still needs live infra (cannot complete without access)
 
 1. Isolated DB: provision empty Neon project/branch → `TEST_DATABASE_URL=... npm run verify:isolated-db` → migrate → re-verify → create 2 test orgs → exercise sequence API.
-2. Agent/API integration with real sessions: 6 agents × auth/permissions/org-isolation/ownership/malformed I/O/provider-failure/rate-limit/confirmation/audit.
-3. Cross-tenant attempts with direct IDs + spoofed org IDs across CRM/analytics/AI/notifications/agents.
+2. Profile photo storage integration with a private Blob store and authenticated sessions.
+3. Cross-tenant attempts with direct IDs + spoofed org IDs across CRM/analytics/AI/notifications.
 4. `PLAYWRIGHT_BASE_URL=<staging> npx playwright test` (responsive + regression) — never against prod.
 5. Full regression in staging (auth, CRM CRUD, intelligence, sequences).
 6. Prod migration window with backup (see OPERATIONS.md §2).

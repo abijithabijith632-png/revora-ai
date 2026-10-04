@@ -37,7 +37,6 @@ export const PERMISSION_RESOURCES = [
   "roles",
   "settings",
   "audit_logs",
-  "ai_insights",
   "organization",
   // Phase 16 administrative resources
   "billing",
@@ -104,7 +103,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleName, ReadonlySet<Permission>> =
     ...perm("reports", "view", "export"),
     ...perm("analytics", "view", "export"),
     ...perm("notifications", "view"),
-    ...perm("ai_insights", "view"),
   ]),
   Admin: new Set<Permission>([
     ...perm("dashboard", "view"),
@@ -130,7 +128,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleName, ReadonlySet<Permission>> =
     ...perm("reports", "view", "export"),
     ...perm("analytics", "view", "export"),
     ...perm("notifications", "view"),
-    ...perm("ai_insights", "view"),
   ]),
   "Sales Manager": new Set<Permission>([
     ...perm("dashboard", "view"),
@@ -148,7 +145,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleName, ReadonlySet<Permission>> =
     ...perm("reports", "view", "export"),
     ...perm("analytics", "view"),
     ...perm("notifications", "view"),
-    ...perm("ai_insights", "view"),
   ]),
   "Sales Executive": new Set<Permission>([
     ...perm("dashboard", "view"),

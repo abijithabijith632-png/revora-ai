@@ -49,7 +49,7 @@ app/
   activities/
   tasks/
   meetings/
-  ai-assistant/
+  # Optional AI Assistant was later decommissioned before this release.
   analytics/
   documents/
   notifications/

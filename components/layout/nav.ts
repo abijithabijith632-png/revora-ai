@@ -70,8 +70,6 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Intelligence",
     items: [
-      { label: "AI Assistant", href: "/ai-assistant", icon: Sparkles, permission: "ai_insights.view" },
-      { label: "AI Agents", href: "/ai-agents", icon: Sparkles, permission: "dashboard.view" },
       { label: "Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
       { label: "Sales Intelligence", href: "/sales-intelligence", icon: Sparkles, permission: "dashboard.view" },
     ],

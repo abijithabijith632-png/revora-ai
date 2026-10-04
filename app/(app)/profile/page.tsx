@@ -50,6 +50,8 @@ export default async function ProfilePage() {
             <CardContent>
               <ProfileForm
                 initial={{
+                  userId: session.userId,
+                  organizationId: session.organizationId,
                   fullName: row?.fullName ?? session.fullName,
                   jobTitle: row?.jobTitle ?? session.jobTitle,
                   department: row?.department ?? null,
@@ -84,7 +86,7 @@ export default async function ProfilePage() {
               <div className="flex items-center gap-3">
                 <Avatar
                   name={row?.fullName ?? session.fullName}
-                  src={row?.avatarUrl ?? undefined}
+                  src={row?.avatarUrl?.startsWith("private-blob:") ? "/api/auth/profile/photo" : row?.avatarUrl ?? undefined}
                   size="lg"
                 />
                 <div className="min-w-0">

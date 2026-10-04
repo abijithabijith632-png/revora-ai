@@ -35,13 +35,12 @@ Target stack: Next.js on Vercel (`bom1`), PostgreSQL on Neon, Drizzle ORM.
 
 - `GET /api/health` returns `{ status, environment, database, timestamp }`. Poll it from Vercel checks or an external uptime monitor. `database: down` = degraded.
 - Watch Vercel function logs for `[health] database check failed`, `AI provider error`, `RateLimitedError` spikes.
-- AI provider: Groq default, 25s timeout, JSON-mode, deterministic fallback. No key = features gated, never fabricated. Monitor `method: deterministic_provider_fallback` in `ai_agent_run` audit rows.
+- AI provider: Groq default, 25s timeout, JSON-mode. No key = provider-backed features report unavailable; record-based scoring and intelligence stay available where supported.
 
 ## 5. AI data handling
 
 - Model receives only authorized CRM context; lead email is sent as availability boolean, not the address.
-- Agent outputs are recommendations; writes require `confirmed: true` via `/api/agents/actions` + existing services + `recordAudit`.
-- Email actions create drafts only (`sent: false`). No auto-send, no deletes, no permission changes, no SQL execution.
+- Optional AI Assistant and AI Agents are decommissioned. Retained AI features include lead scoring, meeting summaries, and sales intelligence.
 
 ## 6. Deployment checklist (prod)
 
